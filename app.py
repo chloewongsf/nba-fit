@@ -393,7 +393,17 @@ scheme_vec = build_scheme_vector(sliders)
 # Scheme fit toggle
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
-# Cache management section
+# Player source selection at the top
+player_source = st.sidebar.radio("Player Source", ["NBA Player", "Custom Player"], key="player_source_radio")
+
+st.sidebar.subheader("Player Selection")
+
+# Team splits toggle
+show_team_splits = st.sidebar.toggle("Show team splits", value=False)
+
+nba_client = get_nba_client()
+
+# Cache management section (after nba_client is initialized)
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Cache Management")
 if st.sidebar.button("Clear Cache", help="Clear all cached player data"):
@@ -417,16 +427,6 @@ if hasattr(nba_client, 'cache_manager'):
         st.sidebar.info(f"💾 Cache: {len(cache_files)} files")
     else:
         st.sidebar.info("💾 Cache: No files")
-
-# Player source selection at the top
-player_source = st.sidebar.radio("Player Source", ["NBA Player", "Custom Player"], key="player_source_radio")
-
-st.sidebar.subheader("Player Selection")
-
-# Team splits toggle
-show_team_splits = st.sidebar.toggle("Show team splits", value=False)
-
-nba_client = get_nba_client()
 selected_player = None
 selected_player_id = None
 player_vec = None
