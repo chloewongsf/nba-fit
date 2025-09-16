@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
+import os
 from services.nba_client import NBAClient
 from core.features import FeatureEngineer
 from core.context import build_scheme_vector, summarize_roster
@@ -392,6 +393,31 @@ scheme_vec = build_scheme_vector(sliders)
 # Scheme fit toggle
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
+# Cache management section
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Cache Management")
+if st.sidebar.button("Clear Cache", help="Clear all cached player data"):
+    try:
+        if hasattr(nba_client, 'cache_manager'):
+            cache_dir = nba_client.cache_manager.cache_dir
+            if os.path.exists(cache_dir):
+                import shutil
+                shutil.rmtree(cache_dir)
+                st.sidebar.success("✅ Cache cleared successfully!")
+            else:
+                st.sidebar.info("ℹ️ No cache directory found")
+    except Exception as e:
+        st.sidebar.error(f"❌ Error clearing cache: {str(e)}")
+
+# Show cache status
+if hasattr(nba_client, 'cache_manager'):
+    cache_dir = nba_client.cache_manager.cache_dir
+    if os.path.exists(cache_dir):
+        cache_files = [f for f in os.listdir(cache_dir) if f.endswith('.csv')]
+        st.sidebar.info(f"💾 Cache: {len(cache_files)} files")
+    else:
+        st.sidebar.info("💾 Cache: No files")
+
 # Player source selection at the top
 player_source = st.sidebar.radio("Player Source", ["NBA Player", "Custom Player"], key="player_source_radio")
 
@@ -409,10 +435,20 @@ player_stats_df = None
 # Get active players for lineup selection (needed for both NBA and custom players)
 with st.spinner("Loading active NBA players..."):
     try:
-        st.write("🔍 Debug: Fetching active players from NBA API...")
+        st.write("🔍 Debug: Fetching active players...")
         active_players_df = nba_client.get_active_players()
         player_names = active_players_df['full_name'].tolist() if not active_players_df.empty else []
         st.write(f"✅ Debug: Successfully loaded {len(player_names)} active players")
+        
+        # Show cache status
+        if hasattr(nba_client, 'cache_manager'):
+            cache_dir = nba_client.cache_manager.cache_dir
+            if os.path.exists(cache_dir):
+                cache_files = [f for f in os.listdir(cache_dir) if f.endswith('.csv')]
+                st.write(f"💾 Debug: Cache directory has {len(cache_files)} files")
+            else:
+                st.write("💾 Debug: No cache directory found")
+        
     except Exception as e:
         st.sidebar.error(f"❌ Error loading players: {str(e)}")
         st.write(f"🔍 Debug: Full error details: {str(e)}")
@@ -464,10 +500,25 @@ if player_source == "NBA Player":
                     else:
                         st.write("⚠️ Debug: No player stats data returned")
             except Exception as e:
-                st.sidebar.error(f"Error fetching player stats: {str(e)}")
+                st.sidebar.error(f"❌ Error fetching player stats: {str(e)}")
                 # Add more detailed error information for debugging
                 import traceback
-                st.sidebar.error(f"Full error details: {traceback.format_exc()}")
+                st.error(f"🔍 **Full Error Traceback:**")
+                st.code(traceback.format_exc())
+                st.error(f"🔍 **Error Type:** {type(e).__name__}")
+                st.error(f"🔍 **Error Args:** {e.args}")
+                
+                # Check if it's an API-related error
+                error_str = str(e).lower()
+                if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
+                    st.warning("🚨 **API Rate Limit or Network Issue Detected**")
+                    st.info("💡 **Solution:** The app will try to use cached data if available, or show a fallback message.")
+                elif 'permission' in error_str or 'forbidden' in error_str:
+                    st.error("🚫 **Permission Error:** NBA API access may be restricted")
+                elif 'not found' in error_str or '404' in error_str:
+                    st.error("🔍 **Player Not Found:** The selected player may not have stats for this season")
+                else:
+                    st.error("❓ **Unknown Error:** Please check the traceback above for details")
 
 else:  # Custom Player
     st.sidebar.subheader("Custom Player Stats")

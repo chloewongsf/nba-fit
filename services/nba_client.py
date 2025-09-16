@@ -10,6 +10,12 @@ import time
 import random
 from nba_api.stats.static import players
 from nba_api.stats.endpoints import playercareerstats
+import sys
+import os
+
+# Add parent directory to path to import cache_manager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from cache_manager import CacheManager
 
 
 class NBAClient:
@@ -31,6 +37,7 @@ class NBAClient:
             'User-Agent': 'NBA-Fit-App/1.0',
             'Accept': 'application/json'
         }
+        self.cache_manager = CacheManager()
     
     def get_player_stats(self, player_name: str, season: str = "2023-24") -> Dict[str, Any]:
         """
@@ -257,16 +264,22 @@ class NBAClient:
     
     def get_active_players(self) -> pd.DataFrame:
         """
-        Get a DataFrame of active NBA players using the NBA API.
+        Get a DataFrame of active NBA players using the NBA API with caching.
         
         Returns:
             DataFrame with columns 'id' and 'full_name' for active players
         """
+        # Try to get from cache first
+        cached_players = self.cache_manager.get_cached_players()
+        if cached_players is not None:
+            return cached_players
+        
         try:
             # Add timeout and retry logic for Streamlit Cloud
             import time
             time.sleep(0.1)  # Small delay to avoid rate limits
             
+            print("🔍 Fetching active players from NBA API...")
             # Get all players from NBA API
             all_players = players.get_players()
             
@@ -282,21 +295,29 @@ class NBAClient:
             # Reset index
             result_df = result_df.reset_index(drop=True)
             
+            # Cache the result
+            self.cache_manager.cache_players(result_df)
+            
+            print(f"✅ Successfully fetched {len(result_df)} active players from API")
             return result_df
             
         except Exception as e:
-            # Fallback to empty DataFrame if API call fails
-            print(f"Error fetching active players: {e}")
-            # Return a small sample of known players as fallback
-            fallback_players = pd.DataFrame({
-                'id': [201939, 203110, 203999, 201142, 201935],  # Curry, Green, Jokic, Durant, Lillard
-                'full_name': ['Stephen Curry', 'Draymond Green', 'Nikola Jokic', 'Kevin Durant', 'Damian Lillard']
-            })
-            return fallback_players
+            # Fallback to cached data or fallback list if API call fails
+            print(f"❌ Error fetching active players from API: {e}")
+            
+            # Try to get from cache even if expired
+            cached_players = self.cache_manager.get_cached_players()
+            if cached_players is not None:
+                print("✅ Using expired cache data")
+                return cached_players
+            
+            # Use fallback list
+            print("✅ Using fallback player list")
+            return self.cache_manager.get_fallback_players()
 
     def get_player_per_game(self, player_id: int, season: str, include_splits: bool = False) -> pd.DataFrame:
         """
-        Get player per-game statistics for a specific season using the NBA API.
+        Get player per-game statistics for a specific season using the NBA API with caching.
         
         Args:
             player_id: NBA player ID
@@ -308,11 +329,17 @@ class NBAClient:
             If no rows match the season, returns data for the most recent season.
             By default, returns only the TOT row if present, otherwise the single row.
         """
+        # Try to get from cache first
+        cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
+        if cached_stats is not None:
+            return cached_stats
+        
         try:
             # Add small delay to avoid rate limits on Streamlit Cloud
             import time
             time.sleep(0.2)
             
+            print(f"🔍 Fetching stats for player {player_id} from NBA API...")
             # Get player career stats
             career_stats = playercareerstats.PlayerCareerStats(
                 player_id=player_id,
@@ -324,6 +351,10 @@ class NBAClient:
             
             if career_data.empty:
                 print(f"No career data found for player {player_id}")
+                # Try fallback stats
+                fallback_stats = self.cache_manager.get_fallback_player_stats(player_id, season)
+                if fallback_stats is not None:
+                    return fallback_stats
                 return pd.DataFrame()
             
             # Filter for the requested season
@@ -353,11 +384,29 @@ class NBAClient:
                     # Return the single row (or first row if multiple)
                     result = season_data.iloc[:1].reset_index(drop=True)
             
+            # Cache the result
+            self.cache_manager.cache_player_stats(player_id, season, result)
+            
+            print(f"✅ Successfully fetched stats for player {player_id} from API")
             return result
             
         except Exception as e:
-            print(f"Error fetching player per-game stats for player {player_id}: {e}")
+            print(f"❌ Error fetching player per-game stats for player {player_id}: {e}")
+            
+            # Try to get from cache even if expired
+            cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
+            if cached_stats is not None:
+                print("✅ Using expired cache data")
+                return cached_stats
+            
+            # Try fallback stats
+            fallback_stats = self.cache_manager.get_fallback_player_stats(player_id, season)
+            if fallback_stats is not None:
+                print("✅ Using fallback stats")
+                return fallback_stats
+            
             # Return empty DataFrame with expected columns for graceful handling
+            print("⚠️ No data available, returning empty DataFrame")
             return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
 
     def validate_api_connection(self) -> bool:
