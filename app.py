@@ -409,10 +409,13 @@ player_stats_df = None
 # Get active players for lineup selection (needed for both NBA and custom players)
 with st.spinner("Loading active NBA players..."):
     try:
+        st.write("🔍 Debug: Fetching active players from NBA API...")
         active_players_df = nba_client.get_active_players()
         player_names = active_players_df['full_name'].tolist() if not active_players_df.empty else []
+        st.write(f"✅ Debug: Successfully loaded {len(player_names)} active players")
     except Exception as e:
-        st.sidebar.error(f"Error loading players: {str(e)}")
+        st.sidebar.error(f"❌ Error loading players: {str(e)}")
+        st.write(f"🔍 Debug: Full error details: {str(e)}")
         active_players_df = pd.DataFrame()
         player_names = []
 
@@ -438,8 +441,10 @@ if player_source == "NBA Player":
                 if not hasattr(nba_client, 'get_player_per_game'):
                     st.sidebar.error("NBA client is missing required method. Please redeploy the application with the latest code.")
                 else:
+                    st.write(f"🔍 Debug: Fetching stats for player ID {selected_player_id} for season {CURRENT_SEASON}")
                     player_stats_df = nba_client.get_player_per_game(selected_player_id, CURRENT_SEASON, include_splits=show_team_splits)
                     if not player_stats_df.empty:
+                        st.write(f"✅ Debug: Successfully loaded player stats. Shape: {player_stats_df.shape}")
                         feature_engineer = FeatureEngineer()
                         # For NBA players, we want the TOT row or single row (not splits)
                         if show_team_splits:
@@ -447,12 +452,17 @@ if player_source == "NBA Player":
                             tot_row = player_stats_df[player_stats_df['TEAM_ABBREVIATION'] == 'TOT']
                             if not tot_row.empty:
                                 player_vec = feature_engineer.build_player_vector(tot_row)
+                                st.write("✅ Debug: Built player vector from TOT row")
                             else:
                                 # Use first row if no TOT
                                 player_vec = feature_engineer.build_player_vector(player_stats_df.iloc[:1])
+                                st.write("✅ Debug: Built player vector from first row (no TOT)")
                         else:
                             # Already have TOT or single row
                             player_vec = feature_engineer.build_player_vector(player_stats_df)
+                            st.write("✅ Debug: Built player vector from single row")
+                    else:
+                        st.write("⚠️ Debug: No player stats data returned")
             except Exception as e:
                 st.sidebar.error(f"Error fetching player stats: {str(e)}")
                 # Add more detailed error information for debugging
@@ -559,15 +569,19 @@ roster_summary = None
 if starting_lineup_ids:
     with st.spinner("Analyzing lineup..."):
         try:
+            st.write(f"🔍 Debug: Analyzing roster with {len(starting_lineup_ids)} players")
             roster_summary = summarize_roster(starting_lineup_ids, [], CURRENT_SEASON)
+            st.write("✅ Debug: Successfully analyzed roster")
         except Exception as e:
-            st.sidebar.warning(f"Error analyzing roster: {str(e)}")
+            st.sidebar.warning(f"❌ Error analyzing roster: {str(e)}")
+            st.write(f"🔍 Debug: Roster analysis error: {str(e)}")
             roster_summary = None
 
 # Score player fit
 lineup_fit_result = None
 
 if player_vec is not None:
+    st.write("🔍 Debug: Starting player fit scoring...")
     if roster_summary:
         # Create lineup summary for fit analysis
         lineup_summary = {
@@ -575,18 +589,22 @@ if player_vec is not None:
             'lineup_centroid': roster_summary.get('lineup_centroid', {}),
         }
         
+        st.write(f"🔍 Debug: Scoring with roster context. Lineup vectors: {len(lineup_summary['lineup_vectors'])}")
         print(f"DEBUG: App - lineup_summary keys: {list(lineup_summary.keys())}")
         print(f"DEBUG: App - scheme_vec: {scheme_vec}")
         print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
         
         lineup_fit_result = score_player(player_vec, scheme_vec, lineup_summary, consider_scheme_fit)
+        st.write("✅ Debug: Successfully scored player fit with roster context")
     else:
         # For custom players or when no roster is selected, score without roster context
+        st.write("🔍 Debug: Scoring without roster context")
         print(f"DEBUG: App - No roster selected, scoring without roster context")
         print(f"DEBUG: App - scheme_vec: {scheme_vec}")
         print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
         
         lineup_fit_result = score_player(player_vec, scheme_vec, None, consider_scheme_fit)
+        st.write("✅ Debug: Successfully scored player fit without roster context")
 
 
 # Display lineup fit analysis with beautiful player card
