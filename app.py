@@ -434,23 +434,30 @@ if player_source == "NBA Player":
         # Fetch player stats and build vector
         if selected_player_id:
             try:
-                player_stats_df = nba_client.get_player_per_game(selected_player_id, CURRENT_SEASON, include_splits=show_team_splits)
-                if not player_stats_df.empty:
-                    feature_engineer = FeatureEngineer()
-                    # For NBA players, we want the TOT row or single row (not splits)
-                    if show_team_splits:
-                        # If showing splits, get the TOT row for the vector
-                        tot_row = player_stats_df[player_stats_df['TEAM_ABBREVIATION'] == 'TOT']
-                        if not tot_row.empty:
-                            player_vec = feature_engineer.build_player_vector(tot_row)
+                # Check if the method exists
+                if not hasattr(nba_client, 'get_player_per_game'):
+                    st.sidebar.error("NBA client is missing required method. Please redeploy the application with the latest code.")
+                else:
+                    player_stats_df = nba_client.get_player_per_game(selected_player_id, CURRENT_SEASON, include_splits=show_team_splits)
+                    if not player_stats_df.empty:
+                        feature_engineer = FeatureEngineer()
+                        # For NBA players, we want the TOT row or single row (not splits)
+                        if show_team_splits:
+                            # If showing splits, get the TOT row for the vector
+                            tot_row = player_stats_df[player_stats_df['TEAM_ABBREVIATION'] == 'TOT']
+                            if not tot_row.empty:
+                                player_vec = feature_engineer.build_player_vector(tot_row)
+                            else:
+                                # Use first row if no TOT
+                                player_vec = feature_engineer.build_player_vector(player_stats_df.iloc[:1])
                         else:
-                            # Use first row if no TOT
-                            player_vec = feature_engineer.build_player_vector(player_stats_df.iloc[:1])
-                    else:
-                        # Already have TOT or single row
-                        player_vec = feature_engineer.build_player_vector(player_stats_df)
+                            # Already have TOT or single row
+                            player_vec = feature_engineer.build_player_vector(player_stats_df)
             except Exception as e:
                 st.sidebar.error(f"Error fetching player stats: {str(e)}")
+                # Add more detailed error information for debugging
+                import traceback
+                st.sidebar.error(f"Full error details: {traceback.format_exc()}")
 
 else:  # Custom Player
     st.sidebar.subheader("Custom Player Stats")
