@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, List
 import time
 import random
 from nba_api.stats.static import players
+from nba_api.stats.endpoints import playercareerstats
 
 
 class NBAClient:
@@ -283,6 +284,66 @@ class NBAClient:
             # Fallback to empty DataFrame if API call fails
             print(f"Error fetching active players: {e}")
             return pd.DataFrame(columns=['id', 'full_name'])
+
+    def get_player_per_game(self, player_id: int, season: str, include_splits: bool = False) -> pd.DataFrame:
+        """
+        Get player per-game statistics for a specific season using the NBA API.
+        
+        Args:
+            player_id: NBA player ID
+            season: NBA season (e.g., "2023-24")
+            include_splits: If True, return all rows (team splits + TOT). If False, return only TOT row or single row.
+            
+        Returns:
+            DataFrame with per-game statistics for the given season.
+            If no rows match the season, returns data for the most recent season.
+            By default, returns only the TOT row if present, otherwise the single row.
+        """
+        try:
+            # Get player career stats
+            career_stats = playercareerstats.PlayerCareerStats(
+                player_id=player_id,
+                per_mode36="PerGame"
+            )
+            
+            # Get the data
+            career_data = career_stats.get_data_frames()[0]  # First DataFrame contains season stats
+            
+            if career_data.empty:
+                return pd.DataFrame()
+            
+            # Filter for the requested season
+            season_data = career_data[career_data['SEASON_ID'] == season]
+            
+            # If no data for the requested season, get the most recent season
+            if season_data.empty:
+                # Sort by season and get the most recent
+                career_data_sorted = career_data.sort_values('SEASON_ID', ascending=False)
+                season_data = career_data_sorted.iloc[:1]  # Get the most recent season
+                
+                if not season_data.empty:
+                    print(f"No data found for season {season}. Using most recent season: {season_data['SEASON_ID'].iloc[0]}")
+            
+            # Handle TOT row logic
+            if include_splits:
+                # Return all rows (team splits + TOT if present)
+                result = season_data.reset_index(drop=True)
+            else:
+                # Check if there's a TOT row
+                tot_row = season_data[season_data['TEAM_ABBREVIATION'] == 'TOT']
+                
+                if not tot_row.empty:
+                    # Return just the TOT row
+                    result = tot_row.reset_index(drop=True)
+                else:
+                    # Return the single row (or first row if multiple)
+                    result = season_data.iloc[:1].reset_index(drop=True)
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error fetching player per-game stats for player {player_id}: {e}")
+            return pd.DataFrame()
 
     def validate_api_connection(self) -> bool:
         """

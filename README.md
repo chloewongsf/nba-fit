@@ -35,14 +35,32 @@ The application will start and be available at `http://localhost:8501` in your w
 
 ## How to Use
 
-1. **Enter Player Name**: Type the name of the NBA player you want to analyze
-2. **Select Team**: Choose the team you want to evaluate the fit for
-3. **Adjust Parameters**: Use the sliders to weight different aspects of the analysis:
-   - Scoring Weight: Importance of scoring ability
-   - Defense Weight: Importance of defensive skills
-   - Playmaking Weight: Importance of playmaking ability
-4. **Analyze**: Click "Analyze Fit" to get the compatibility score
-5. **Review Results**: Examine the detailed breakdown and visualizations
+1. **Configure Team Scheme**: Use the sliders in the sidebar to define your team's playing style:
+   - Pace: Team's preferred pace of play
+   - 3PT Volume: Emphasis on three-point shooting
+   - Switchability: Defensive switching preferences
+   - Rim Pressure: Rim protection and pressure
+   - Ball Movement: Ball movement and passing emphasis
+   - Offensive Glass: Offensive rebounding priority
+   - Drop vs Switch: Defensive coverage preferences
+   - Foul Avoidance: Foul discipline emphasis
+
+2. **Scheme Fit Toggle**: By default, Scheme Fit is included in player evaluation. You can disable it with the "Consider Scheme Fit" checkbox if you only want to evaluate roster fit without scheme alignment.
+
+3. **Select Player**: Choose between NBA Player or Custom Player:
+   - **NBA Player**: Select from active NBA players and view their statistics
+   - **Custom Player**: Input custom player statistics manually
+
+4. **Configure Roster**: Select starting lineup and bench players to analyze fit within team context
+
+5. **Analyze Fit**: The application automatically calculates:
+   - **Role Match**: How well the player fits their role archetype
+   - **Scheme Fit**: How well the player matches the team's scheme (when enabled)
+   - **Lineup Synergy**: Complementarity with starting lineup
+   - **Team Redundancy**: Similarity to existing roster players
+   - **Upside**: Age-based potential
+
+6. **Review Results**: Examine the detailed breakdown, visualizations, and fit scores
 
 ## Project Structure
 
@@ -52,10 +70,11 @@ nba-fit/
 ├── core/
 │   ├── __init__.py
 │   ├── features.py        # Feature engineering module
-│   └── scoring.py         # Scoring algorithms
+│   ├── scoring.py         # Scoring algorithms with scheme fit toggle
+│   └── context.py         # Team context and roster analysis
 ├── services/
 │   ├── __init__.py
-│   └── nba_client.py      # NBA API client (stub)
+│   └── nba_client.py      # NBA API client
 ├── requirements.txt       # Python dependencies
 └── README.md             # This file
 ```
@@ -64,16 +83,17 @@ nba-fit/
 
 ### Core Modules
 
-- **`features.py`**: Contains the `FeatureEngineer` class for processing player and team data into meaningful features
-- **`scoring.py`**: Implements scoring algorithms including `calculate_fit_score()` and advanced metrics
+- **`features.py`**: Contains the `FeatureEngineer` class for processing player and team data into meaningful features, including custom player input support
+- **`scoring.py`**: Implements advanced scoring algorithms with scheme fit toggle, role match, lineup synergy, and team redundancy calculations
+- **`context.py`**: Handles team context building and roster analysis for comprehensive fit evaluation
 
 ### Services
 
-- **`nba_client.py`**: NBA API client for fetching player and team statistics (currently contains placeholder implementations)
+- **`nba_client.py`**: NBA API client for fetching active players and career statistics with season filtering
 
 ### Main Application
 
-- **`app.py`**: Streamlit application with interactive UI for player-team fit analysis
+- **`app.py`**: Streamlit application with interactive UI featuring scheme configuration, player selection, roster analysis, and comprehensive fit scoring with visualizations
 
 ## Dependencies
 
