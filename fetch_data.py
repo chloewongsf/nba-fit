@@ -35,57 +35,80 @@ def normalize_season(season: str) -> str:
     """
     return season.replace('-', '_')
 
-def fetch_and_save(player_id: int, season: str = DEFAULT_SEASON) -> bool:
+def fetch_and_save(player_id: int, season: str = DEFAULT_SEASON, max_retries: int = 3, overwrite: bool = False) -> bool:
     """
-    Fetch game log data for a single player and save as CSV.
+    Fetch game log data for a single player and save as CSV with retry mechanism.
     
     Args:
         player_id: NBA player ID
         season: NBA season (e.g., "2024-25")
+        max_retries: Maximum number of retry attempts
+        overwrite: If True, overwrite existing CSV files
         
     Returns:
         True if successful, False otherwise
     """
-    try:
-        print(f"📊 Fetching game log for player {player_id} ({season})...")
-        
-        # Fetch game log data
-        log = playergamelog.PlayerGameLog(player_id=player_id, season=season)
-        df = log.get_data_frames()[0]
-        
-        if df.empty:
-            print(f"⚠️ No game log data found for player {player_id} in {season}")
-            return False
-        
-        # Normalize season for filename
-        normalized_season = normalize_season(season)
-        filename = f"{player_id}_{normalized_season}.csv"
-        filepath = os.path.join(DATA_DIR, filename)
-        
-        # Save to CSV
-        df.to_csv(filepath, index=False)
-        print(f"✅ Saved {len(df)} games to {filepath}")
-        
-        # Small delay to be respectful to the API
-        time.sleep(0.2)
-        return True
-        
-    except Exception as e:
-        print(f"❌ Failed to fetch player {player_id}: {e}")
-        return False
+    # Check if CSV already exists
+    normalized_season = normalize_season(season)
+    filename = f"{player_id}_{normalized_season}.csv"
+    filepath = os.path.join(DATA_DIR, filename)
+    
+    if os.path.exists(filepath) and not overwrite:
+        print(f"⏩ Skipping {player_id}, file already exists")
+        return True  # Return True since we have the data
+    
+    for attempt in range(max_retries + 1):
+        try:
+            if attempt > 0:
+                print(f"🔄 Retry {attempt}/{max_retries} for player {player_id}...")
+                time.sleep(2)  # Longer delay on retry
+            
+            # Fetch game log data
+            log = playergamelog.PlayerGameLog(player_id=player_id, season=season)
+            df = log.get_data_frames()[0]
+            
+            if df.empty:
+                print(f"⚠️ No game log data found for player {player_id} in {season}")
+                return False
+            
+            # Save to CSV
+            df.to_csv(filepath, index=False)
+            print(f"✅ Saved {len(df)} games to {filepath}")
+            
+            # Delay between requests to avoid rate limiting
+            time.sleep(1)
+            return True
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            if attempt < max_retries:
+                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'network', 'rate']):
+                    print(f"⚠️ Attempt {attempt + 1} failed for player {player_id}: {e}")
+                    continue
+                else:
+                    print(f"❌ Non-retryable error for player {player_id}: {e}")
+                    return False
+            else:
+                print(f"❌ Failed to fetch player {player_id} after {max_retries + 1} attempts: {e}")
+                return False
+    
+    return False
 
-def fetch_all_players(season: str = DEFAULT_SEASON, max_players: Optional[int] = None) -> dict:
+def fetch_all_players(season: str = DEFAULT_SEASON, max_players: Optional[int] = None, chunk_size: int = 50, overwrite: bool = False) -> dict:
     """
-    Fetch game log data for all active players.
+    Fetch game log data for all active players with chunking and progress tracking.
     
     Args:
         season: NBA season (e.g., "2024-25")
         max_players: Maximum number of players to fetch (None for all)
+        chunk_size: Number of players to process in each chunk
+        overwrite: If True, overwrite existing CSV files
         
     Returns:
         Dictionary with success/failure counts
     """
     print(f"🏀 Fetching game logs for all active players in {season}...")
+    print(f"📦 Chunk size: {chunk_size} players per chunk")
     
     try:
         # Get list of active players
@@ -102,26 +125,58 @@ def fetch_all_players(season: str = DEFAULT_SEASON, max_players: Optional[int] =
             players_df = players_df.head(max_players)
         
         print(f"📊 Found {len(players_df)} active players to process")
+        print(f"📦 Will process in {chunk_size} chunks")
         
         success_count = 0
         failed_count = 0
+        total_chunks = (len(players_df) + chunk_size - 1) // chunk_size
         
-        for i, row in players_df.iterrows():
-            player_id = row["PERSON_ID"]
-            player_name = row["DISPLAY_FIRST_LAST"]
+        # Process players in chunks
+        for chunk_idx in range(0, len(players_df), chunk_size):
+            chunk_end = min(chunk_idx + chunk_size, len(players_df))
+            chunk_df = players_df.iloc[chunk_idx:chunk_end]
+            chunk_num = (chunk_idx // chunk_size) + 1
             
-            print(f"\n[{i+1}/{len(players_df)}] Processing {player_name} (ID: {player_id})")
+            print(f"\n{'='*60}")
+            print(f"📦 Processing Chunk {chunk_num}/{total_chunks}")
+            print(f"📊 Players {chunk_idx + 1}-{chunk_end} of {len(players_df)}")
+            print(f"{'='*60}")
             
-            if fetch_and_save(player_id, season):
-                success_count += 1
-            else:
-                failed_count += 1
+            chunk_success = 0
+            chunk_failed = 0
             
-            # Progress update every 10 players
-            if (i + 1) % 10 == 0:
-                print(f"📈 Progress: {i+1}/{len(players_df)} players processed")
+            for i, row in chunk_df.iterrows():
+                player_id = row["PERSON_ID"]
+                player_name = row["DISPLAY_FIRST_LAST"]
+                global_index = i + 1
+                
+                print(f"\n[{global_index}/{len(players_df)}] Fetching player {global_index} of {len(players_df)} ({player_id}) - {player_name}")
+                
+                if fetch_and_save(player_id, season, overwrite=overwrite):
+                    chunk_success += 1
+                    success_count += 1
+                else:
+                    chunk_failed += 1
+                    failed_count += 1
+            
+            # Chunk summary
+            print(f"\n📦 Chunk {chunk_num} Complete:")
+            print(f"✅ Success: {chunk_success}")
+            print(f"❌ Failed: {chunk_failed}")
+            print(f"📊 Total: {chunk_success + chunk_failed}")
+            
+            # Overall progress
+            processed = chunk_end
+            print(f"\n📈 Overall Progress: {processed}/{len(players_df)} players processed")
+            print(f"✅ Total Success: {success_count}")
+            print(f"❌ Total Failed: {failed_count}")
+            
+            # Save progress after each chunk
+            if chunk_num < total_chunks:
+                print(f"💾 Progress saved. Ready for next chunk...")
+                print(f"🔄 You can restart the script and it will continue from where it left off")
         
-        print(f"\n🎉 Fetch complete!")
+        print(f"\n🎉 All chunks complete!")
         print(f"✅ Successfully fetched: {success_count} players")
         print(f"❌ Failed to fetch: {failed_count} players")
         print(f"📊 Total processed: {success_count + failed_count} players")
@@ -136,12 +191,13 @@ def fetch_all_players(season: str = DEFAULT_SEASON, max_players: Optional[int] =
         print(f"❌ Error fetching all players: {e}")
         return {"success": 0, "failed": 0, "total": 0}
 
-def fetch_popular_players(season: str = DEFAULT_SEASON) -> dict:
+def fetch_popular_players(season: str = DEFAULT_SEASON, overwrite: bool = False) -> dict:
     """
     Fetch game log data for a curated list of popular players.
     
     Args:
         season: NBA season (e.g., "2024-25")
+        overwrite: If True, overwrite existing CSV files
         
     Returns:
         Dictionary with success/failure counts
@@ -173,7 +229,7 @@ def fetch_popular_players(season: str = DEFAULT_SEASON) -> dict:
     for i, player_id in enumerate(popular_player_ids):
         print(f"\n[{i+1}/{len(popular_player_ids)}] Processing player ID {player_id}")
         
-        if fetch_and_save(player_id, season):
+        if fetch_and_save(player_id, season, overwrite=overwrite):
             success_count += 1
         else:
             failed_count += 1
@@ -196,29 +252,44 @@ def main():
     parser.add_argument("--popular", action="store_true", help="Fetch popular players only")
     parser.add_argument("--max", type=int, help="Maximum number of players to fetch (with --all)")
     parser.add_argument("--players", nargs="+", type=int, help="Specific player IDs to fetch")
+    parser.add_argument("--chunk-size", type=int, default=50, help="Chunk size for processing players (default: 50)")
+    parser.add_argument("--retries", type=int, default=3, help="Number of retries for failed requests (default: 3)")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing CSV files (default: skip existing files)")
     
     args = parser.parse_args()
     
     print("🚀 NBA Data Fetcher")
-    print("=" * 50)
+    print("=" * 60)
     print(f"📅 Season: {args.season}")
     print(f"📁 Data directory: {DATA_DIR}")
+    print(f"📦 Chunk size: {args.chunk_size}")
+    print(f"🔄 Max retries: {args.retries}")
+    print(f"⏱️  Delay between requests: 1 second")
+    print(f"📝 Overwrite existing files: {'Yes' if args.overwrite else 'No (skip existing)'}")
+    print("=" * 60)
     print()
     
     if args.all:
         # Fetch all active players
-        results = fetch_all_players(args.season, args.max)
+        print("🏀 Fetching ALL active players...")
+        print("⚠️  This may take a long time and make many API requests!")
+        print("💡 Use --max to limit the number of players")
+        print()
+        
+        results = fetch_all_players(args.season, args.max, args.chunk_size, args.overwrite)
     elif args.popular:
         # Fetch popular players
-        results = fetch_popular_players(args.season)
+        print("⭐ Fetching popular players...")
+        results = fetch_popular_players(args.season, args.overwrite)
     elif args.players:
         # Fetch specific players
         print(f"🎯 Fetching {len(args.players)} specific players...")
         success_count = 0
         failed_count = 0
         
-        for player_id in args.players:
-            if fetch_and_save(player_id, args.season):
+        for i, player_id in enumerate(args.players):
+            print(f"\n[{i+1}/{len(args.players)}] Fetching player {i+1} of {len(args.players)} ({player_id})")
+            if fetch_and_save(player_id, args.season, args.retries, args.overwrite):
                 success_count += 1
             else:
                 failed_count += 1
@@ -236,8 +307,9 @@ def main():
         success_count = 0
         failed_count = 0
         
-        for player_id in example_players:
-            if fetch_and_save(player_id, args.season):
+        for i, player_id in enumerate(example_players):
+            print(f"\n[{i+1}/{len(example_players)}] Fetching player {i+1} of {len(example_players)} ({player_id})")
+            if fetch_and_save(player_id, args.season, args.retries, args.overwrite):
                 success_count += 1
             else:
                 failed_count += 1
@@ -248,7 +320,7 @@ def main():
             "total": success_count + failed_count
         }
     
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("📊 Final Results:")
     print(f"✅ Successful: {results['success']}")
     print(f"❌ Failed: {results['failed']}")
@@ -262,6 +334,18 @@ def main():
         print(f"   git commit -m 'Update player data for {args.season}'")
         print(f"   git push")
         print(f"3. Your Streamlit app will now load from these CSV files!")
+        
+        # Show some example files
+        import glob
+        csv_files = glob.glob(os.path.join(DATA_DIR, f"*_{normalize_season(args.season)}.csv"))
+        if csv_files:
+            print(f"\n📁 Example files created:")
+            for file in csv_files[:5]:  # Show first 5 files
+                print(f"   - {os.path.basename(file)}")
+            if len(csv_files) > 5:
+                print(f"   ... and {len(csv_files) - 5} more files")
+    
+    print(f"\n🎉 Fetch complete!")
 
 if __name__ == "__main__":
     main()
