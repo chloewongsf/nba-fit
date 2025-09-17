@@ -13,9 +13,10 @@ from nba_api.stats.endpoints import playercareerstats
 import sys
 import os
 
-# Add parent directory to path to import cache_manager
+# Add parent directory to path to import cache_manager and fallback_data_manager
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cache_manager import CacheManager
+from fallback_data_manager import FallbackDataManager
 
 
 class NBAClient:
@@ -38,6 +39,7 @@ class NBAClient:
             'Accept': 'application/json'
         }
         self.cache_manager = CacheManager()
+        self.fallback_manager = FallbackDataManager()
     
     def get_player_stats(self, player_name: str, season: str = "2023-24") -> Dict[str, Any]:
         """
@@ -264,7 +266,7 @@ class NBAClient:
     
     def get_active_players(self) -> pd.DataFrame:
         """
-        Get a DataFrame of active NBA players using the NBA API with caching.
+        Get a DataFrame of active NBA players using the NBA API with caching and fallback.
         
         Returns:
             DataFrame with columns 'id' and 'full_name' for active players
@@ -302,18 +304,32 @@ class NBAClient:
             return result_df
             
         except Exception as e:
-            # Fallback to cached data or fallback list if API call fails
-            print(f"❌ Error fetching active players from API: {e}")
+            # Show detailed error information
+            import streamlit as st
+            st.error(f"❌ **NBA API Error:** {str(e)}")
+            st.error(f"🔍 **Error Type:** {type(e).__name__}")
+            
+            # Check if it's an API-related error
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
+                st.warning("🚨 **NBA API is blocked or rate limited**")
+                st.info("💡 **Using fallback data to keep the app functional**")
+            elif 'permission' in error_str or 'forbidden' in error_str:
+                st.error("🚫 **NBA API access is restricted**")
+            else:
+                st.error("❓ **Unknown NBA API error**")
             
             # Try to get from cache even if expired
             cached_players = self.cache_manager.get_cached_players()
             if cached_players is not None:
                 print("✅ Using expired cache data")
+                st.info("📁 Using cached data (may be outdated)")
                 return cached_players
             
-            # Use fallback list
-            print("✅ Using fallback player list")
-            return self.cache_manager.get_fallback_players()
+            # Use fallback CSV data
+            print("✅ Using fallback data")
+            st.info("📁 Using fallback CSV data")
+            return self.fallback_manager.get_fallback_players()
 
     def get_player_per_game(self, player_id: int, season: str, include_splits: bool = False) -> pd.DataFrame:
         """
@@ -391,22 +407,38 @@ class NBAClient:
             return result
             
         except Exception as e:
-            print(f"❌ Error fetching player per-game stats for player {player_id}: {e}")
+            # Show detailed error information
+            import streamlit as st
+            st.error(f"❌ **NBA API Error for player {player_id}:** {str(e)}")
+            st.error(f"🔍 **Error Type:** {type(e).__name__}")
+            
+            # Check if it's an API-related error
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
+                st.warning("🚨 **NBA API is blocked or rate limited**")
+                st.info("💡 **Using fallback data to keep the app functional**")
+            elif 'permission' in error_str or 'forbidden' in error_str:
+                st.error("🚫 **NBA API access is restricted**")
+            else:
+                st.error("❓ **Unknown NBA API error**")
             
             # Try to get from cache even if expired
             cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
             if cached_stats is not None:
                 print("✅ Using expired cache data")
+                st.info("📁 Using cached data (may be outdated)")
                 return cached_stats
             
-            # Try fallback stats
-            fallback_stats = self.cache_manager.get_fallback_player_stats(player_id, season)
+            # Try fallback CSV data
+            fallback_stats = self.fallback_manager.get_fallback_stats_for_player(player_id, season)
             if fallback_stats is not None:
-                print("✅ Using fallback stats")
+                print("✅ Using fallback CSV data")
+                st.info("📁 Using fallback CSV data")
                 return fallback_stats
             
             # Return empty DataFrame with expected columns for graceful handling
             print("⚠️ No data available, returning empty DataFrame")
+            st.warning(f"⚠️ No data available for player {player_id} in {season}")
             return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
 
     def validate_api_connection(self) -> bool:

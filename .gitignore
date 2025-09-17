@@ -1,7 +1,9 @@
-# Cache files
+# Cache files (exclude from repo)
 cache/
-*.csv
-*.json
+
+# Data files (include in repo for fallback)
+# data/active_players.csv
+# data/player_stats.csv
 
 # Python
 __pycache__/
