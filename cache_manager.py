@@ -26,17 +26,21 @@ class CacheManager:
         """Convert numpy types to native Python types for JSON serialization."""
         import numpy as np
         
-        if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
-            return int(value)
-        elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
-            return float(value)
-        elif isinstance(value, (np.bool_, np.bool8)):
-            return bool(value)
-        elif isinstance(value, np.ndarray):
-            return value.tolist()
-        elif hasattr(value, 'item'):  # Other numpy scalars
-            return value.item()
+        # Handle numpy scalars by checking their dtype
+        if hasattr(value, 'dtype'):
+            if np.issubdtype(value.dtype, np.integer):
+                return int(value)
+            elif np.issubdtype(value.dtype, np.floating):
+                return float(value)
+            elif np.issubdtype(value.dtype, np.bool_):
+                return bool(value)
+            elif isinstance(value, np.ndarray):
+                return value.tolist()
+            else:
+                # Fallback for other numpy types
+                return value.item() if hasattr(value, 'item') else value
         else:
+            # Not a numpy type, return as-is
             return value
     
     def _get_cache_key(self, data_type: str, **kwargs) -> str:
