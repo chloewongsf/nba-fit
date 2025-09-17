@@ -22,9 +22,31 @@ class CacheManager:
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
     
+    def _convert_to_serializable(self, value):
+        """Convert numpy types to native Python types for JSON serialization."""
+        import numpy as np
+        
+        if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(value)
+        elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+            return float(value)
+        elif isinstance(value, (np.bool_, np.bool8)):
+            return bool(value)
+        elif isinstance(value, np.ndarray):
+            return value.tolist()
+        elif hasattr(value, 'item'):  # Other numpy scalars
+            return value.item()
+        else:
+            return value
+    
     def _get_cache_key(self, data_type: str, **kwargs) -> str:
         """Generate a cache key for the given parameters."""
-        key_string = f"{data_type}_{json.dumps(kwargs, sort_keys=True)}"
+        # Convert numpy types to native Python types for JSON serialization
+        serializable_kwargs = {}
+        for key, value in kwargs.items():
+            serializable_kwargs[key] = self._convert_to_serializable(value)
+        
+        key_string = f"{data_type}_{json.dumps(serializable_kwargs, sort_keys=True)}"
         return hashlib.md5(key_string.encode()).hexdigest()
     
     def _get_cache_path(self, cache_key: str, extension: str = "json") -> str:
