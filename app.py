@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import os
-from services.nba_client import NBAClient
+from data_api import get_active_players_df, get_player_df, clear_player_cache
 from core.features import FeatureEngineer
 from core.context import build_scheme_vector, summarize_roster
 from core.scoring import score_player
@@ -357,24 +357,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Initialize NBA client
-def get_nba_client():
-    return NBAClient()
-
-# Cache player list at startup
-@st.cache_data
-def load_active_players():
-    """Load and cache the list of active players once at startup."""
-    nba_client = NBAClient()
-    return nba_client.get_active_players()
-
-# Cache individual player stats
-@st.cache_data
-def load_player_stats(player_id: int, season: str):
-    """Load and cache individual player stats."""
-    nba_client = NBAClient()
-    return nba_client.get_player_per_game(player_id, season)
-
 # Cache scheme vector computation
 @st.cache_data
 def compute_scheme_vector(pace, three_point_volume, switchability, rim_pressure, 
@@ -392,42 +374,17 @@ def compute_scheme_vector(pace, three_point_volume, switchability, rim_pressure,
         'foul_avoidance': foul_avoidance
     })
 
-# Cache lineup summary computation
-@st.cache_data
-def compute_lineup_summary(starting_lineup_ids, active_players_df):
-    """Cache lineup summary computation."""
-    if not starting_lineup_ids or active_players_df.empty:
-        return None
-    
-    from core.context import summarize_roster
-    from core.features import FeatureEngineer
-    
-    feature_engineer = FeatureEngineer()
-    lineup_vectors = []
-    
-    for player_id in starting_lineup_ids:
-        try:
-            player_stats_df = load_player_stats(player_id, CURRENT_SEASON)
-            if not player_stats_df.empty:
-                player_vec = feature_engineer.build_player_vector(player_stats_df)
-                lineup_vectors.append(player_vec)
-        except Exception as e:
-            print(f"Error loading player {player_id}: {e}")
-            continue
-    
-    if lineup_vectors:
-        return summarize_roster(lineup_vectors)
-    return None
-
-# Load active players once at startup
+# Load active players using new data API
 with st.spinner("Loading active NBA players..."):
     try:
-        active_players_df = load_active_players()
-        player_names = active_players_df['full_name'].tolist() if not active_players_df.empty else []
+        active_players_df = get_active_players_df()
+        player_names = active_players_df['name'].tolist() if not active_players_df.empty else []
+        name_to_id = dict(zip(active_players_df['name'], active_players_df['player_id']))
     except Exception as e:
         st.sidebar.error(f"❌ Error loading players: {str(e)}")
         active_players_df = pd.DataFrame()
         player_names = []
+        name_to_id = {}
 
 # Sidebar with scheme sliders
 st.sidebar.markdown("### Team Scheme Configuration")
@@ -461,6 +418,22 @@ scheme_vec = compute_scheme_vector(pace, three_point_volume, switchability, rim_
 # Scheme fit toggle
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
+# Cache management
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Cache Management")
+if st.sidebar.button("Clear Player Cache", help="Clear cached player data to force fresh API calls"):
+    clear_player_cache()
+    st.sidebar.success("Player cache cleared!")
+    st.rerun()
+
+# Season selection
+CURRENT_SEASON = st.sidebar.selectbox(
+    "Season",
+    ["2024-25", "2023-24", "2022-23"],
+    index=0,
+    key="season_select"
+)
+
 # Player source selection at the top
 player_source = st.sidebar.radio("Player Source", ["NBA Player", "Custom Player"], key="player_source_radio")
 
@@ -469,14 +442,12 @@ st.sidebar.subheader("Player Selection")
 # Team splits toggle
 show_team_splits = st.sidebar.toggle("Show team splits", value=False)
 
-nba_client = get_nba_client()
-
 selected_player = None
 selected_player_id = None
 player_vec = None
 player_stats_df = None
 
-# Active players are already loaded and cached above
+# Active players are loaded using new data API above
 
 if player_source == "NBA Player":
     # NBA Player selection
@@ -489,15 +460,13 @@ if player_source == "NBA Player":
         )
         
         # Get the selected player's ID
-        selected_player_id = active_players_df[
-            active_players_df['full_name'] == selected_player
-        ]['id'].iloc[0]
+        selected_player_id = name_to_id.get(selected_player)
         
         # Fetch player stats and build vector
         if selected_player_id:
             try:
-                # Load player stats using cached function
-                player_stats_df = load_player_stats(selected_player_id, CURRENT_SEASON)
+                # Load player stats using new data API with session state caching
+                player_stats_df = get_player_df(selected_player_id, CURRENT_SEASON)
                 if not player_stats_df.empty:
                     feature_engineer = FeatureEngineer()
                     # For NBA players, we want the TOT row or single row (not splits)
@@ -601,10 +570,9 @@ if selected_player:
     starting_lineup_ids = []
     if starting_lineup_names:
         for name in starting_lineup_names:
-            player_id = active_players_df[
-                active_players_df['full_name'] == name
-            ]['id'].iloc[0]
-            starting_lineup_ids.append(player_id)
+            player_id = name_to_id.get(name)
+            if player_id:
+                starting_lineup_ids.append(player_id)
 else:
     # No roster selection when no player is selected
     starting_lineup_ids = []
@@ -613,7 +581,28 @@ else:
 # Build roster summary if players are selected (works for both NBA and custom players)
 roster_summary = None
 if starting_lineup_ids:
-    roster_summary = compute_lineup_summary(starting_lineup_ids, active_players_df)
+    try:
+        from core.context import summarize_roster
+        from core.features import FeatureEngineer
+        
+        feature_engineer = FeatureEngineer()
+        lineup_vectors = []
+        
+        for player_id in starting_lineup_ids:
+            try:
+                player_stats_df = get_player_df(player_id, CURRENT_SEASON)
+                if not player_stats_df.empty:
+                    player_vec = feature_engineer.build_player_vector(player_stats_df)
+                    lineup_vectors.append(player_vec)
+            except Exception as e:
+                print(f"Error loading player {player_id}: {e}")
+                continue
+        
+        if lineup_vectors:
+            roster_summary = summarize_roster(lineup_vectors)
+    except Exception as e:
+        st.sidebar.warning(f"❌ Error analyzing roster: {str(e)}")
+        roster_summary = None
 
 # Score player fit
 lineup_fit_result = None
