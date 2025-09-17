@@ -8,8 +8,6 @@ import numpy as np
 from typing import Dict, Any, Optional, List
 import time
 import random
-from nba_api.stats.static import players
-from nba_api.stats.endpoints import playercareerstats
 import sys
 import os
 
@@ -266,180 +264,127 @@ class NBAClient:
     
     def get_active_players(self) -> pd.DataFrame:
         """
-        Get a DataFrame of active NBA players using the NBA API with caching and fallback.
+        Get a DataFrame of active NBA players from cached CSV files.
         
         Returns:
             DataFrame with columns 'id' and 'full_name' for active players
         """
+        import streamlit as st
+        
         # Try to get from cache first
         cached_players = self.cache_manager.get_cached_players()
         if cached_players is not None:
+            st.write("📁 Loaded active players from cache")
             return cached_players
         
-        try:
-            # Add timeout and retry logic for Streamlit Cloud
-            import time
-            time.sleep(0.1)  # Small delay to avoid rate limits
-            
-            print("🔍 Fetching active players from NBA API...")
-            # Get all players from NBA API
-            all_players = players.get_players()
-            
-            # Convert to DataFrame
-            players_df = pd.DataFrame(all_players)
-            
-            # Filter for active players (is_active = True)
-            active_players = players_df[players_df['is_active'] == True]
-            
-            # Select only id and full_name columns
-            result_df = active_players[['id', 'full_name']].copy()
-            
-            # Reset index
-            result_df = result_df.reset_index(drop=True)
-            
-            # Cache the result
-            self.cache_manager.cache_players(result_df)
-            
-            print(f"✅ Successfully fetched {len(result_df)} active players from API")
-            return result_df
-            
-        except Exception as e:
-            # Show detailed error information
-            import streamlit as st
-            st.error(f"❌ **NBA API Error:** {str(e)}")
-            st.error(f"🔍 **Error Type:** {type(e).__name__}")
-            
-            # Check if it's an API-related error
-            error_str = str(e).lower()
-            if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
-                st.warning("🚨 **NBA API is blocked or rate limited**")
-                st.info("💡 **Using fallback data to keep the app functional**")
-            elif 'permission' in error_str or 'forbidden' in error_str:
-                st.error("🚫 **NBA API access is restricted**")
-            else:
-                st.error("❓ **Unknown NBA API error**")
-            
-            # Try to get from cache even if expired
-            cached_players = self.cache_manager.get_cached_players()
-            if cached_players is not None:
-                print("✅ Using expired cache data")
-                st.info("📁 Using cached data (may be outdated)")
-                return cached_players
-            
-            # Use fallback CSV data
-            print("✅ Using fallback data")
-            st.info("📁 Using fallback CSV data")
-            return self.fallback_manager.get_fallback_players()
+        # Use fallback CSV data
+        st.write("📁 Loading active players from fallback CSV")
+        return self.fallback_manager.get_fallback_players()
 
     def get_player_per_game(self, player_id: int, season: str, include_splits: bool = False) -> pd.DataFrame:
         """
-        Get player per-game statistics for a specific season using the NBA API with caching.
+        Get player per-game statistics from cached CSV files.
         
         Args:
             player_id: NBA player ID
-            season: NBA season (e.g., "2023-24")
+            season: NBA season (e.g., "2024-25")
             include_splits: If True, return all rows (team splits + TOT). If False, return only TOT row or single row.
             
         Returns:
             DataFrame with per-game statistics for the given season.
-            If no rows match the season, returns data for the most recent season.
-            By default, returns only the TOT row if present, otherwise the single row.
         """
+        import streamlit as st
+        import os
+        
         # Try to get from cache first
         cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
         if cached_stats is not None:
+            st.write(f"📁 Loaded stats for player {player_id} from cache")
             return cached_stats
         
-        try:
-            # Add small delay to avoid rate limits on Streamlit Cloud
-            import time
-            time.sleep(0.2)
+        # Try to load from individual player CSV files
+        # Support both season formats: 2024-25 and 2024_25
+        season_formats = [season, season.replace('-', '_')]
+        tried_files = []
+        
+        for season_format in season_formats:
+            csv_path = os.path.join("data", f"{player_id}_{season_format}.csv")
+            tried_files.append(csv_path)
             
-            print(f"🔍 Fetching stats for player {player_id} from NBA API...")
-            # Get player career stats
-            career_stats = playercareerstats.PlayerCareerStats(
-                player_id=player_id,
-                per_mode36="PerGame"
-            )
+            if os.path.exists(csv_path):
+                try:
+                    st.write(f"📁 Loading stats for player {player_id} from CSV: {csv_path}")
+                    df = pd.read_csv(csv_path)
+                    
+                    if not df.empty:
+                        # Convert game log data to per-game stats format
+                        # Calculate per-game averages from game log data
+                        per_game_stats = self._convert_game_log_to_per_game(df, player_id, season)
+                        st.write(f"✅ Successfully loaded and converted stats for player {player_id}")
+                        return per_game_stats
+                    else:
+                        st.warning(f"⚠️ Empty CSV file for player {player_id}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error reading CSV for player {player_id}: {e}")
+                    continue
+        
+        # Try fallback CSV data
+        fallback_stats = self.fallback_manager.get_fallback_stats_for_player(player_id, season)
+        if fallback_stats is not None:
+            st.write(f"📁 Using fallback CSV data for player {player_id}")
+            return fallback_stats
+        
+        # No data available - show which files were tried
+        st.warning(f"⚠️ No cached stats available for player {player_id} and season {season}")
+        st.warning(f"🔍 Tried files: {', '.join(tried_files)}")
+        return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
+    
+    def _convert_game_log_to_per_game(self, game_log_df: pd.DataFrame, player_id: int, season: str) -> pd.DataFrame:
+        """
+        Convert game log data to per-game statistics format.
+        
+        Args:
+            game_log_df: DataFrame with game log data
+            player_id: NBA player ID
+            season: NBA season
             
-            # Get the data
-            career_data = career_stats.get_data_frames()[0]  # First DataFrame contains season stats
-            
-            if career_data.empty:
-                print(f"No career data found for player {player_id}")
-                # Try fallback stats
-                fallback_stats = self.cache_manager.get_fallback_player_stats(player_id, season)
-                if fallback_stats is not None:
-                    return fallback_stats
-                return pd.DataFrame()
-            
-            # Filter for the requested season
-            season_data = career_data[career_data['SEASON_ID'] == season]
-            
-            # If no data for the requested season, get the most recent season
-            if season_data.empty:
-                # Sort by season and get the most recent
-                career_data_sorted = career_data.sort_values('SEASON_ID', ascending=False)
-                season_data = career_data_sorted.iloc[:1]  # Get the most recent season
-                
-                if not season_data.empty:
-                    print(f"No data found for season {season}. Using most recent season: {season_data['SEASON_ID'].iloc[0]}")
-            
-            # Handle TOT row logic
-            if include_splits:
-                # Return all rows (team splits + TOT if present)
-                result = season_data.reset_index(drop=True)
-            else:
-                # Check if there's a TOT row
-                tot_row = season_data[season_data['TEAM_ABBREVIATION'] == 'TOT']
-                
-                if not tot_row.empty:
-                    # Return just the TOT row
-                    result = tot_row.reset_index(drop=True)
-                else:
-                    # Return the single row (or first row if multiple)
-                    result = season_data.iloc[:1].reset_index(drop=True)
-            
-            # Cache the result
-            self.cache_manager.cache_player_stats(player_id, season, result)
-            
-            print(f"✅ Successfully fetched stats for player {player_id} from API")
-            return result
-            
-        except Exception as e:
-            # Show detailed error information
-            import streamlit as st
-            st.error(f"❌ **NBA API Error for player {player_id}:** {str(e)}")
-            st.error(f"🔍 **Error Type:** {type(e).__name__}")
-            
-            # Check if it's an API-related error
-            error_str = str(e).lower()
-            if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
-                st.warning("🚨 **NBA API is blocked or rate limited**")
-                st.info("💡 **Using fallback data to keep the app functional**")
-            elif 'permission' in error_str or 'forbidden' in error_str:
-                st.error("🚫 **NBA API access is restricted**")
-            else:
-                st.error("❓ **Unknown NBA API error**")
-            
-            # Try to get from cache even if expired
-            cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
-            if cached_stats is not None:
-                print("✅ Using expired cache data")
-                st.info("📁 Using cached data (may be outdated)")
-                return cached_stats
-            
-            # Try fallback CSV data
-            fallback_stats = self.fallback_manager.get_fallback_stats_for_player(player_id, season)
-            if fallback_stats is not None:
-                print("✅ Using fallback CSV data")
-                st.info("📁 Using fallback CSV data")
-                return fallback_stats
-            
-            # Return empty DataFrame with expected columns for graceful handling
-            print("⚠️ No data available, returning empty DataFrame")
-            st.warning(f"⚠️ No data available for player {player_id} in {season}")
-            return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
+        Returns:
+            DataFrame with per-game statistics
+        """
+        if game_log_df.empty:
+            return pd.DataFrame()
+        
+        # Calculate per-game averages
+        per_game_stats = {
+            'PLAYER_ID': player_id,
+            'SEASON_ID': season,
+            'TEAM_ABBREVIATION': game_log_df['MATCHUP'].iloc[0].split(' ')[0] if 'MATCHUP' in game_log_df.columns else 'UNK',
+            'PLAYER_AGE': 25,  # Default age
+            'GP': len(game_log_df),
+            'GS': len(game_log_df),  # Assume all games started
+            'MIN': game_log_df['MIN'].mean() if 'MIN' in game_log_df.columns else 0,
+            'FGM': game_log_df['FGM'].mean() if 'FGM' in game_log_df.columns else 0,
+            'FGA': game_log_df['FGA'].mean() if 'FGA' in game_log_df.columns else 0,
+            'FG_PCT': game_log_df['FG_PCT'].mean() if 'FG_PCT' in game_log_df.columns else 0,
+            'FG3M': game_log_df['FG3M'].mean() if 'FG3M' in game_log_df.columns else 0,
+            'FG3A': game_log_df['FG3A'].mean() if 'FG3A' in game_log_df.columns else 0,
+            'FG3_PCT': game_log_df['FG3_PCT'].mean() if 'FG3_PCT' in game_log_df.columns else 0,
+            'FTM': game_log_df['FTM'].mean() if 'FTM' in game_log_df.columns else 0,
+            'FTA': game_log_df['FTA'].mean() if 'FTA' in game_log_df.columns else 0,
+            'FT_PCT': game_log_df['FT_PCT'].mean() if 'FT_PCT' in game_log_df.columns else 0,
+            'OREB': game_log_df['OREB'].mean() if 'OREB' in game_log_df.columns else 0,
+            'DREB': game_log_df['DREB'].mean() if 'DREB' in game_log_df.columns else 0,
+            'REB': game_log_df['REB'].mean() if 'REB' in game_log_df.columns else 0,
+            'AST': game_log_df['AST'].mean() if 'AST' in game_log_df.columns else 0,
+            'STL': game_log_df['STL'].mean() if 'STL' in game_log_df.columns else 0,
+            'BLK': game_log_df['BLK'].mean() if 'BLK' in game_log_df.columns else 0,
+            'TOV': game_log_df['TOV'].mean() if 'TOV' in game_log_df.columns else 0,
+            'PF': game_log_df['PF'].mean() if 'PF' in game_log_df.columns else 0,
+            'PTS': game_log_df['PTS'].mean() if 'PTS' in game_log_df.columns else 0
+        }
+        
+        return pd.DataFrame([per_game_stats])
 
     def validate_api_connection(self) -> bool:
         """

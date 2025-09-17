@@ -477,7 +477,7 @@ if player_source == "NBA Player":
                 if not hasattr(nba_client, 'get_player_per_game'):
                     st.sidebar.error("NBA client is missing required method. Please redeploy the application with the latest code.")
                 else:
-                    st.write(f"🔍 Debug: Fetching stats for player ID {selected_player_id} for season {CURRENT_SEASON}")
+                    st.write(f"🔍 Debug: Loading stats for player ID {selected_player_id} for season {CURRENT_SEASON}")
                     player_stats_df = nba_client.get_player_per_game(selected_player_id, CURRENT_SEASON, include_splits=show_team_splits)
                     if not player_stats_df.empty:
                         st.write(f"✅ Debug: Successfully loaded player stats. Shape: {player_stats_df.shape}")
@@ -500,25 +500,13 @@ if player_source == "NBA Player":
                     else:
                         st.write("⚠️ Debug: No player stats data returned")
             except Exception as e:
-                st.sidebar.error(f"❌ Error fetching player stats: {str(e)}")
+                st.sidebar.error(f"❌ Error loading player stats: {str(e)}")
                 # Add more detailed error information for debugging
                 import traceback
                 st.error(f"🔍 **Full Error Traceback:**")
                 st.code(traceback.format_exc())
                 st.error(f"🔍 **Error Type:** {type(e).__name__}")
                 st.error(f"🔍 **Error Args:** {e.args}")
-                
-                # Check if it's an API-related error
-                error_str = str(e).lower()
-                if any(keyword in error_str for keyword in ['rate', 'limit', 'blocked', 'timeout', 'connection', 'network']):
-                    st.warning("🚨 **API Rate Limit or Network Issue Detected**")
-                    st.info("💡 **Solution:** The app will try to use cached data if available, or show a fallback message.")
-                elif 'permission' in error_str or 'forbidden' in error_str:
-                    st.error("🚫 **Permission Error:** NBA API access may be restricted")
-                elif 'not found' in error_str or '404' in error_str:
-                    st.error("🔍 **Player Not Found:** The selected player may not have stats for this season")
-                else:
-                    st.error("❓ **Unknown Error:** Please check the traceback above for details")
 
 else:  # Custom Player
     st.sidebar.subheader("Custom Player Stats")
