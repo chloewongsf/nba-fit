@@ -288,29 +288,28 @@ class NBAClient:
         """
         import streamlit as st
         
-        # Support both season formats: 2024-25 and 2024_25
-        season_formats = [season, season.replace('-', '_')]
+        # Always use underscore format for season (e.g., 2024_25)
+        season_underscore = season.replace('-', '_')
+        csv_path = os.path.join("data", f"{player_id}_{season_underscore}.csv")
         
-        for season_format in season_formats:
-            csv_path = os.path.join("data", f"{player_id}_{season_format}.csv")
-            
-            if os.path.exists(csv_path):
-                try:
-                    df = pd.read_csv(csv_path)
+        if os.path.exists(csv_path):
+            try:
+                df = pd.read_csv(csv_path)
+                
+                if not df.empty:
+                    # Convert game log data to per-game stats format
+                    per_game_stats = self._convert_game_log_to_per_game(df, player_id, season)
+                    return per_game_stats
+                else:
+                    st.warning(f"⚠️ Empty CSV file for player {player_id}")
+                    return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
                     
-                    if not df.empty:
-                        # Convert game log data to per-game stats format
-                        per_game_stats = self._convert_game_log_to_per_game(df, player_id, season)
-                        return per_game_stats
-                    else:
-                        st.warning(f"⚠️ Empty CSV file for player {player_id}")
-                        
-                except Exception as e:
-                    st.error(f"❌ Error reading CSV for player {player_id}: {e}")
-                    continue
+            except Exception as e:
+                st.error(f"❌ Error reading CSV for player {player_id}: {e}")
+                return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
         
-        # No data available
-        st.warning(f"⚠️ No CSV file found for player {player_id} in data/")
+        # No data available - show clear warning
+        st.warning(f"⚠️ No stats available for player {player_id} in {season}. File not found: data/{player_id}_{season_underscore}.csv")
         return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
     
     def _convert_game_log_to_per_game(self, game_log_df: pd.DataFrame, player_id: int, season: str) -> pd.DataFrame:
