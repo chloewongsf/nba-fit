@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import os
-from data_api import get_active_players_df, get_player_df, clear_player_cache
+from data_api import get_active_players_df, get_player_df, get_player_season_stats, get_player_season_averages_df
 from core.features import FeatureEngineer
 from core.context import build_scheme_vector, summarize_roster
 from core.scoring import score_player
@@ -88,28 +88,45 @@ def get_player_image_url(player_id):
     """Get NBA.com player image URL"""
     return f"https://cdn.nba.com/headshots/nba/latest/260x190/{player_id}.png"
 
-def create_player_card(player_name, player_vec, fit_result, analysis_type):
-    """Create a player card using the working structure from the previous example."""
+def create_player_card(player_name, player_id, season_stats, fit_result, analysis_type):
+    """Create a player card using NBA API data."""
     
-    # Get player info and scores
-    if player_vec:
-        age = int(player_vec.get('age', 0))
-        height_in = int(player_vec.get('height_in', 0))
-        weight_lb = int(player_vec.get('weight_lb', 0))
-        position = player_vec.get('POSITION', 'Unknown')
-        player_id = player_vec.get('PLAYER_ID', 0)
+    # Get player info from season stats
+    if season_stats:
+        age = season_stats.get('age', 0)
+        height = season_stats.get('height', 'Unknown')
+        weight = season_stats.get('weight', 'Unknown')
+        position = season_stats.get('position', 'Unknown')
+        team = season_stats.get('team', 'Unknown')
+        jersey = season_stats.get('jersey', 'Unknown')
         
-        # Convert height to feet and inches
-        feet = height_in // 12
-        inches = height_in % 12
-        height_display = f"{feet}'{inches}\""
+        # Get season averages
+        pts_avg = season_stats.get('PTS_avg', 0)
+        reb_avg = season_stats.get('REB_avg', 0)
+        ast_avg = season_stats.get('AST_avg', 0)
+        fg_pct = season_stats.get('FG_PCT', 0)
+        fg3_pct = season_stats.get('FG3_PCT', 0)
+        ft_pct = season_stats.get('FT_PCT', 0)
+        games_played = season_stats.get('games_played', 0)
+        
+        # Format percentages
+        fg_pct_display = f"{fg_pct:.1%}" if fg_pct > 0 else "N/A"
+        fg3_pct_display = f"{fg3_pct:.1%}" if fg3_pct > 0 else "N/A"
+        ft_pct_display = f"{ft_pct:.1%}" if ft_pct > 0 else "N/A"
     else:
         age = 0
-        height_in = 0
-        weight_lb = 0
+        height = 'Unknown'
+        weight = 'Unknown'
         position = 'Unknown'
-        player_id = 0
-        height_display = "N/A"
+        team = 'Unknown'
+        jersey = 'Unknown'
+        pts_avg = 0
+        reb_avg = 0
+        ast_avg = 0
+        fg_pct_display = "N/A"
+        fg3_pct_display = "N/A"
+        ft_pct_display = "N/A"
+        games_played = 0
     
     # Get scores
     fit_score = fit_result.get('fit_score', 0)
@@ -117,6 +134,7 @@ def create_player_card(player_name, player_vec, fit_result, analysis_type):
     scheme_fit = fit_result.get('scheme_fit', 0)
     lineup_synergy = fit_result.get('lineup_synergy', 0)
     team_redundancy = fit_result.get('team_redundancy', 0)
+    upside = fit_result.get('upside', 0)
     
     # Create custom CSS for the card (using the working structure)
     card_css = """
@@ -242,7 +260,8 @@ def create_player_card(player_name, player_vec, fit_result, analysis_type):
             </div>
             <div class="player-info">
                 <h3>{player_name or 'Custom Player'}</h3>
-                <p>{position} • {CURRENT_SEASON}</p>
+                <p>{position} • {team} #{jersey} • {CURRENT_SEASON}</p>
+                <p style="font-size: 12px; color: #666; margin: 0;">{height} • {weight} • Age {age} • {games_played} games</p>
             </div>
             <div class="main-score" style="margin-left: auto; text-align: right; padding-right: 10px; flex-shrink: 0; min-width: 120px;">
                 <div class="main-score-value" style="font-size: 36px; margin: 0; line-height: 1;">{fit_score:.1f}</div>
@@ -251,20 +270,37 @@ def create_player_card(player_name, player_vec, fit_result, analysis_type):
         </div>
         <div class="stats-grid">
             <div class="stat-item">
-                <p class="stat-value">{role_match:.1f}</p>
-                <p class="stat-label">Role Match</p>
+                <p class="stat-value">{pts_avg:.1f}</p>
+                <p class="stat-label">PPG</p>
             </div>
             <div class="stat-item">
-                <p class="stat-value">{scheme_fit:.1f}</p>
-                <p class="stat-label">Scheme Fit</p>
+                <p class="stat-value">{reb_avg:.1f}</p>
+                <p class="stat-label">RPG</p>
             </div>
             <div class="stat-item">
-                <p class="stat-value">{lineup_synergy:.1f}</p>
-                <p class="stat-label">Synergy</p>
+                <p class="stat-value">{ast_avg:.1f}</p>
+                <p class="stat-label">APG</p>
             </div>
             <div class="stat-item">
-                <p class="stat-value">{100 - team_redundancy:.1f}</p>
-                <p class="stat-label">Uniqueness</p>
+                <p class="stat-value">{fg_pct_display}</p>
+                <p class="stat-label">FG%</p>
+            </div>
+            <div class="stat-item">
+                <p class="stat-value">{fg3_pct_display}</p>
+                <p class="stat-label">3P%</p>
+            </div>
+            <div class="stat-item">
+                <p class="stat-value">{ft_pct_display}</p>
+                <p class="stat-label">FT%</p>
+            </div>
+        </div>
+        <div class="fit-scores" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+                <span>Role Match: {role_match:.1f}</span>
+                <span>Scheme Fit: {scheme_fit:.1f}</span>
+                <span>Lineup Synergy: {lineup_synergy:.1f}</span>
+                <span>Team Redundancy: {team_redundancy:.1f}</span>
+                <span>Upside: {upside:.1f}</span>
             </div>
         </div>
     </div>
@@ -418,13 +454,6 @@ scheme_vec = compute_scheme_vector(pace, three_point_volume, switchability, rim_
 # Scheme fit toggle
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
-# Cache management
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Cache Management")
-if st.sidebar.button("Clear Player Cache", help="Clear cached player data to force fresh API calls"):
-    clear_player_cache()
-    st.sidebar.success("Player cache cleared!")
-    st.rerun()
 
 # Season selection
 CURRENT_SEASON = st.sidebar.selectbox(
@@ -633,8 +662,14 @@ if player_vec is not None:
 if lineup_fit_result is not None:
     st.subheader("Lineup Fit Analysis")
     
-    # Create beautiful player card
-    create_player_card(selected_player, player_vec, lineup_fit_result, "Lineup Fit")
+    # Create beautiful player card with NBA API data
+    if player_source == "NBA Player" and selected_player_id:
+        season_stats = get_player_season_stats(selected_player_id, CURRENT_SEASON)
+        create_player_card(selected_player, selected_player_id, season_stats, lineup_fit_result, "Lineup Fit")
+    else:
+        # For custom players, use placeholder data
+        create_player_card(selected_player, 0, {}, lineup_fit_result, "Lineup Fit")
+    
     
     # Show visualization message for custom players
     if player_source == "Custom Player":
@@ -671,7 +706,24 @@ if roster_summary:
     
 
 # Display player stats if available
-if selected_player and player_stats_df is not None and not player_stats_df.empty:
+if selected_player and player_source == "NBA Player" and selected_player_id:
+    # Use NBA API data for season averages
+    season_averages_df = get_player_season_averages_df(selected_player_id, CURRENT_SEASON)
+    if not season_averages_df.empty:
+        st.markdown(f"""
+        <style>
+        .season-stats-header {{
+            font-size: 1.05rem !important;
+            font-weight: 600 !important;
+            margin-top: 2rem !important;
+            margin-bottom: 0.5rem !important;
+        }}
+        </style>
+        <div class="season-stats-header">Candidate's Season Stats</div>
+        """, unsafe_allow_html=True)
+        st.dataframe(season_averages_df, use_container_width=True)
+elif selected_player and player_stats_df is not None and not player_stats_df.empty:
+    # Fallback for custom players or when NBA API data not available
     splits_text = " (with team splits)" if show_team_splits else ""
     st.markdown(f"""
     <style>
@@ -682,112 +734,112 @@ if selected_player and player_stats_df is not None and not player_stats_df.empty
         margin-bottom: 0.5rem !important;
     }}
     </style>
-    <div class="season-stats-header">Season Stats{splits_text}</div>
+    <div class="season-stats-header">Candidate's Season Stats{splits_text}</div>
     """, unsafe_allow_html=True)
     st.dataframe(player_stats_df, use_container_width=True)
+
+# Display radar chart for player vs scheme fit (for all players)
+if player_vec is not None:
+    # Define the features to display in radar chart
+    radar_features = [
+        'three_rate', 'ft_rate', 'ast_pct', 'tov_pct', 
+        'stl_pct', 'blk_pct', 'dreb_pct', 'switchability', 'rim_protect'
+    ]
     
-    # Display radar chart for player vs scheme fit
-    if player_vec is not None:
-        # Define the features to display in radar chart
-        radar_features = [
-            'three_rate', 'ft_rate', 'ast_pct', 'tov_pct', 
-            'stl_pct', 'blk_pct', 'dreb_pct', 'switchability', 'rim_protect'
-        ]
-        
-        # Normalize features to 0-100 scale
-        def normalize_feature(value, feature_name):
-            if feature_name in ['three_rate', 'ft_rate', 'switchability', 'rim_protect']:
-                # These are already 0-1 scale, convert to 0-100
-                return min(100, max(0, value * 100))
-            else:
-                # These are already in appropriate ranges, just ensure 0-100
-                return min(100, max(0, value))
-        
-        # Extract and normalize player values
-        player_values = []
-        scheme_values = []
-        
-        for feature in radar_features:
-            player_val = player_vec.get(feature, 0)
-            scheme_val = scheme_vec.get(feature, 0)
-            
-            player_values.append(normalize_feature(player_val, feature))
-            scheme_values.append(normalize_feature(scheme_val, feature))
-        
-        # Create radar chart
-        fig = go.Figure()
-        
-        # Add player vector (blue)
-        fig.add_trace(go.Scatterpolar(
-            r=player_values,
-            theta=radar_features,
-            fill='toself',
-            name='Player',
-            line_color='blue',
-            fillcolor='rgba(0, 100, 255, 0.3)'
-        ))
-        
-        # Add scheme vector (red)
-        fig.add_trace(go.Scatterpolar(
-            r=scheme_values,
-            theta=radar_features,
-            fill='toself',
-            name='Scheme',
-            line_color='red',
-            fillcolor='rgba(255, 0, 0, 0.3)'
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 100]
-                )),
-            showlegend=True,
-            title="Player vs Scheme Fit",
-            height=500
-        )
-        
-        # Display radar chart and fit score breakdown side by side
-        if lineup_fit_result is not None:
-            col1, col2 = st.columns(2, gap="large")
-            
-            with col1:
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                # Prepare data for bar chart
-                breakdown_data = {
-                    'Component': ['Role Match', 'Scheme Fit', 'Lineup Synergy', 'Team Redundancy', 'Upside'],
-                    'Score': [
-                        lineup_fit_result['role_match'],
-                        lineup_fit_result['scheme_fit'],
-                        lineup_fit_result['lineup_synergy'],
-                        100 - lineup_fit_result['team_redundancy'],  # Invert redundancy for display
-                        lineup_fit_result['upside']
-                    ]
-                }
-                
-                # Create horizontal bar chart
-                fig_bar = px.bar(
-                    x=breakdown_data['Score'],
-                    y=breakdown_data['Component'],
-                    orientation='h',
-                    title="Fit Score Components",
-                    labels={'x': 'Score (0-100)', 'y': 'Component'},
-                    color=breakdown_data['Score'],
-                    color_continuous_scale='RdYlGn'
-                )
-                
-                fig_bar.update_layout(
-                    height=500,
-                    showlegend=False,
-                    xaxis=dict(range=[0, 100])
-                )
-                
-                st.plotly_chart(fig_bar, use_container_width=True)
+    # Normalize features to 0-100 scale
+    def normalize_feature(value, feature_name):
+        if feature_name in ['three_rate', 'ft_rate', 'switchability', 'rim_protect']:
+            # These are already 0-1 scale, convert to 0-100
+            return min(100, max(0, value * 100))
         else:
+            # These are already in appropriate ranges, just ensure 0-100
+            return min(100, max(0, value))
+    
+    # Extract and normalize player values
+    player_values = []
+    scheme_values = []
+    
+    for feature in radar_features:
+        player_val = player_vec.get(feature, 0)
+        scheme_val = scheme_vec.get(feature, 0)
+        
+        player_values.append(normalize_feature(player_val, feature))
+        scheme_values.append(normalize_feature(scheme_val, feature))
+    
+    # Create radar chart
+    fig = go.Figure()
+    
+    # Add player vector (blue)
+    fig.add_trace(go.Scatterpolar(
+        r=player_values,
+        theta=radar_features,
+        fill='toself',
+        name='Player',
+        line_color='blue',
+        fillcolor='rgba(0, 100, 255, 0.3)'
+    ))
+    
+    # Add scheme vector (red)
+    fig.add_trace(go.Scatterpolar(
+        r=scheme_values,
+        theta=radar_features,
+        fill='toself',
+        name='Scheme',
+        line_color='red',
+        fillcolor='rgba(255, 0, 0, 0.3)'
+    ))
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100]
+            )),
+        showlegend=True,
+        title="Player vs Scheme Fit",
+        height=500
+    )
+    
+    # Display radar chart and fit score breakdown side by side
+    if lineup_fit_result is not None:
+        col1, col2 = st.columns(2, gap="large")
+        
+        with col1:
             st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Prepare data for bar chart
+            breakdown_data = {
+                'Component': ['Role Match', 'Scheme Fit', 'Lineup Synergy', 'Team Redundancy', 'Upside'],
+                'Score': [
+                    lineup_fit_result['role_match'],
+                    lineup_fit_result['scheme_fit'],
+                    lineup_fit_result['lineup_synergy'],
+                    100 - lineup_fit_result['team_redundancy'],  # Invert redundancy for display
+                    lineup_fit_result['upside']
+                ]
+            }
+            
+            # Create horizontal bar chart
+            fig_bar = px.bar(
+                x=breakdown_data['Score'],
+                y=breakdown_data['Component'],
+                orientation='h',
+                title="Fit Score Components",
+                labels={'x': 'Score (0-100)', 'y': 'Component'},
+                color=breakdown_data['Score'],
+                color_continuous_scale='RdYlGn'
+            )
+            
+            fig_bar.update_layout(
+                height=500,
+                showlegend=False,
+                xaxis=dict(range=[0, 100])
+            )
+            
+            st.plotly_chart(fig_bar, use_container_width=True)
+    else:
+        st.plotly_chart(fig, use_container_width=True)
 elif selected_player and player_source == "NBA Player" and player_stats_df is not None and player_stats_df.empty:
     st.warning(f"No stats available for {selected_player} in the {CURRENT_SEASON} season")
 elif selected_player and player_source == "NBA Player" and 'unique_seasons' in locals() and not unique_seasons:

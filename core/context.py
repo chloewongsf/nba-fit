@@ -5,7 +5,6 @@ Contains functions to build scheme vectors from team context and sliders.
 
 import numpy as np
 from typing import Dict, Any, List
-from services.nba_client import NBAClient
 from core.features import FeatureEngineer
 
 
@@ -32,48 +31,18 @@ def build_scheme_vector(sliders: Dict[str, Any]) -> Dict[str, Any]:
     return sliders.copy()
 
 
-def summarize_roster(lineup_ids: List[int], bench_ids: List[int], season: str) -> Dict[str, Any]:
+def summarize_roster(lineup_vectors: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Summarize a roster by fetching player stats and computing feature vectors.
+    Summarize a roster by computing centroids from player feature vectors.
     
     Args:
-        lineup_ids: List of NBA player IDs for starting lineup
-        bench_ids: List of NBA player IDs for bench players
-        season: NBA season (e.g., "2023-24")
+        lineup_vectors: List of player feature vectors for the lineup
         
     Returns:
-        Dictionary containing lineup_vectors, bench_vectors, full_roster_vectors,
-        lineup_centroid, and team_centroid
+        Dictionary containing lineup_vectors, lineup_centroid, and team_centroid
     """
-    nba_client = NBAClient()
-    feature_engineer = FeatureEngineer()
-    
-    def process_player_list(player_ids: List[int]) -> List[Dict[str, Any]]:
-        """Helper function to process a list of player IDs and return vectors."""
-        vectors = []
-        for player_id in player_ids:
-            try:
-                # Get player stats for the season
-                player_stats_df = nba_client.get_player_per_game(player_id, season)
-                
-                if not player_stats_df.empty:
-                    # Build player vector
-                    player_vector = feature_engineer.build_player_vector(player_stats_df)
-                    vectors.append(player_vector)
-                else:
-                    print(f"No stats found for player {player_id} in season {season}")
-                    
-            except Exception as e:
-                print(f"Error processing player {player_id}: {e}")
-                continue
-        return vectors
-    
-    # Process lineup and bench players separately
-    lineup_vectors = process_player_list(lineup_ids)
-    bench_vectors = process_player_list(bench_ids)
-    
-    # Combine for full roster
-    full_roster_vectors = lineup_vectors + bench_vectors
+    # For now, we only work with lineup vectors (no bench players)
+    full_roster_vectors = lineup_vectors
     
     def compute_centroid(vectors: List[Dict[str, Any]]) -> Dict[str, float]:
         """Helper function to compute centroid from a list of vectors."""
@@ -110,7 +79,6 @@ def summarize_roster(lineup_ids: List[int], bench_ids: List[int], season: str) -
     
     return {
         'lineup_vectors': lineup_vectors,
-        'bench_vectors': bench_vectors,
         'full_roster_vectors': full_roster_vectors,
         'lineup_centroid': lineup_centroid,
         'team_centroid': team_centroid
