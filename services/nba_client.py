@@ -11,11 +11,6 @@ import random
 import sys
 import os
 
-# Add parent directory to path to import cache_manager and fallback_data_manager
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from cache_manager import CacheManager
-from fallback_data_manager import FallbackDataManager
-
 
 class NBAClient:
     """
@@ -36,8 +31,6 @@ class NBAClient:
             'User-Agent': 'NBA-Fit-App/1.0',
             'Accept': 'application/json'
         }
-        self.cache_manager = CacheManager()
-        self.fallback_manager = FallbackDataManager()
     
     def get_player_stats(self, player_name: str, season: str = "2023-24") -> Dict[str, Any]:
         """
@@ -264,26 +257,26 @@ class NBAClient:
     
     def get_active_players(self) -> pd.DataFrame:
         """
-        Get a DataFrame of active NBA players from cached CSV files.
+        Get a DataFrame of active NBA players from CSV files.
         
         Returns:
             DataFrame with columns 'id' and 'full_name' for active players
         """
         import streamlit as st
         
-        # Try to get from cache first
-        cached_players = self.cache_manager.get_cached_players()
-        if cached_players is not None:
-            st.write("📁 Loaded active players from cache")
-            return cached_players
-        
-        # Use fallback CSV data
-        st.write("📁 Loading active players from fallback CSV")
-        return self.fallback_manager.get_fallback_players()
+        # Load from fallback CSV data
+        fallback_path = os.path.join("data", "active_players.csv")
+        if os.path.exists(fallback_path):
+            df = pd.read_csv(fallback_path)
+            return df
+        else:
+            st.warning("⚠️ No active players CSV found in data/")
+            # Return empty DataFrame with expected columns
+            return pd.DataFrame(columns=['id', 'full_name'])
 
     def get_player_per_game(self, player_id: int, season: str, include_splits: bool = False) -> pd.DataFrame:
         """
-        Get player per-game statistics from cached CSV files.
+        Get player per-game statistics from CSV files.
         
         Args:
             player_id: NBA player ID
@@ -294,33 +287,20 @@ class NBAClient:
             DataFrame with per-game statistics for the given season.
         """
         import streamlit as st
-        import os
         
-        # Try to get from cache first
-        cached_stats = self.cache_manager.get_cached_player_stats(player_id, season)
-        if cached_stats is not None:
-            st.write(f"📁 Loaded stats for player {player_id} from cache")
-            return cached_stats
-        
-        # Try to load from individual player CSV files
         # Support both season formats: 2024-25 and 2024_25
         season_formats = [season, season.replace('-', '_')]
-        tried_files = []
         
         for season_format in season_formats:
             csv_path = os.path.join("data", f"{player_id}_{season_format}.csv")
-            tried_files.append(csv_path)
             
             if os.path.exists(csv_path):
                 try:
-                    st.write(f"📁 Loading stats for player {player_id} from CSV: {csv_path}")
                     df = pd.read_csv(csv_path)
                     
                     if not df.empty:
                         # Convert game log data to per-game stats format
-                        # Calculate per-game averages from game log data
                         per_game_stats = self._convert_game_log_to_per_game(df, player_id, season)
-                        st.write(f"✅ Successfully loaded and converted stats for player {player_id}")
                         return per_game_stats
                     else:
                         st.warning(f"⚠️ Empty CSV file for player {player_id}")
@@ -329,15 +309,8 @@ class NBAClient:
                     st.error(f"❌ Error reading CSV for player {player_id}: {e}")
                     continue
         
-        # Try fallback CSV data
-        fallback_stats = self.fallback_manager.get_fallback_stats_for_player(player_id, season)
-        if fallback_stats is not None:
-            st.write(f"📁 Using fallback CSV data for player {player_id}")
-            return fallback_stats
-        
-        # No data available - show which files were tried
-        st.warning(f"⚠️ No cached stats available for player {player_id} and season {season}")
-        st.warning(f"🔍 Tried files: {', '.join(tried_files)}")
+        # No data available
+        st.warning(f"⚠️ No CSV file found for player {player_id} in data/")
         return pd.DataFrame(columns=['PLAYER_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'PTS', 'REB', 'AST', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
     
     def _convert_game_log_to_per_game(self, game_log_df: pd.DataFrame, player_id: int, season: str) -> pd.DataFrame:
