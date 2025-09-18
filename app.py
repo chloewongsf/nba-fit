@@ -361,18 +361,8 @@ scheme_vec = compute_scheme_vector(pace, three_point_volume, switchability, rim_
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
 
-# Cache management
-if st.sidebar.button("🔄 Clear Cache & Refresh Data"):
-    st.cache_data.clear()
-    st.rerun()
-
-# Season selection
-CURRENT_SEASON = st.sidebar.selectbox(
-    "Season",
-    ["2024-25", "2023-24", "2022-23"],
-    index=0,
-    key="season_select"
-)
+# Use current season only - no user selection needed
+CURRENT_SEASON = "2024-25"
 
 # Player source selection at the top
 player_source = st.sidebar.radio("Player Source", ["NBA Player", "Custom Player"], key="player_source_radio")
