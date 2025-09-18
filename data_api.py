@@ -1,38 +1,76 @@
 """
 NBA Data API Layer
 
-This module provides a clean interface to the NBA API with proper caching
-and error handling for the Streamlit app.
+This module provides a clean interface to load NBA data from JSON files
+hosted on GitHub Pages, with proper caching for the Streamlit app.
 """
 
 import time
+import logging
 import streamlit as st
 import pandas as pd
-from nba_api.stats.endpoints import commonallplayers, playergamelog
+import requests
+from typing import Dict, Optional
+from config import get_data_url, CACHE_TTL
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DEFAULT_SEASON = "2024-25"
 
-@st.cache_data(ttl=86400)  # 24h cache
+def load_json(url: str) -> Dict:
+    """
+    Load JSON data from a URL.
+    
+    Args:
+        url: URL to fetch JSON from
+        
+    Returns:
+        Dict: JSON data
+        
+    Raises:
+        requests.RequestException: If the request fails
+    """
+    try:
+        logger.debug(f"Fetching JSON from: {url}")
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch JSON from {url}: {e}")
+        raise
+
+@st.cache_data(ttl=CACHE_TTL['active_players'])
 def get_active_players_df():
     """
-    Get list of active NBA players for the current season.
+    Get list of active NBA players from JSON file.
     
     Returns:
         pd.DataFrame: DataFrame with columns 'player_id' and 'name'
     """
     try:
-        df = commonallplayers.CommonAllPlayers(is_only_current_season=1).get_data_frames()[0]
-        return df[["PERSON_ID", "DISPLAY_FIRST_LAST"]].rename(
-            columns={"PERSON_ID": "player_id", "DISPLAY_FIRST_LAST": "name"}
-        )
+        url = get_data_url('active_players')
+        data = load_json(url)
+        
+        if 'players' in data:
+            players = data['players']
+            df = pd.DataFrame(players)
+            logger.info(f"✅ Loaded {len(df)} active players from JSON")
+            return df
+        else:
+            logger.warning("No 'players' key in JSON data")
+            return pd.DataFrame(columns=['player_id', 'name'])
+            
     except Exception as e:
-        st.error(f"Failed to fetch active players: {str(e)}")
-        return pd.DataFrame(columns=["player_id", "name"])
+        logger.error(f"Failed to fetch active players: {e}")
+        st.error(f"Failed to load active players: {str(e)}")
+        return pd.DataFrame(columns=['player_id', 'name'])
 
-@st.cache_data(ttl=900)  # 15 min cache per player/season
+@st.cache_data(ttl=CACHE_TTL['player_gamelog'])
 def fetch_player_gamelog(player_id: int, season: str = DEFAULT_SEASON) -> pd.DataFrame:
     """
-    Fetch player game log data with retry logic and caching.
+    Fetch player game log data from JSON file.
     
     Args:
         player_id: NBA player ID
@@ -42,26 +80,30 @@ def fetch_player_gamelog(player_id: int, season: str = DEFAULT_SEASON) -> pd.Dat
         pd.DataFrame: Player game log data
         
     Raises:
-        RuntimeError: If API fails after 3 retries
+        RuntimeError: If JSON file not found or invalid
     """
-    # retry wrapper to tolerate transient issues
-    last_err = None
-    for i in range(3):
-        try:
-            # nba_api sets headers for stats.nba.com internally
-            log = playergamelog.PlayerGameLog(player_id=player_id, season=season, timeout=30)
-            dfs = log.get_data_frames()
-            if dfs and len(dfs[0]) > 0:
-                return dfs[0]
-            else:
-                # return empty but valid DF to avoid crashes
-                return pd.DataFrame()
-        except Exception as e:
-            last_err = e
-            if i < 2:  # Don't sleep on last attempt
-                time.sleep(0.3)
-    
-    raise RuntimeError(f"NBA API failed after 3 tries for {player_id} {season}: {last_err}")
+    try:
+        url = get_data_url('player_gamelog', player_id=player_id)
+        data = load_json(url)
+        
+        if 'games' in data:
+            games = data['games']
+            df = pd.DataFrame(games)
+            logger.info(f"✅ Loaded {len(df)} games for player {player_id}")
+            return df
+        else:
+            logger.warning(f"No 'games' key in JSON data for player {player_id}")
+            return pd.DataFrame()
+            
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            logger.warning(f"No game log data found for player {player_id}")
+            return pd.DataFrame()
+        else:
+            raise
+    except Exception as e:
+        logger.error(f"Failed to fetch game log for player {player_id}: {e}")
+        raise RuntimeError(f"Failed to load game log for player {player_id}: {e}")
 
 def get_player_df(player_id: int, season: str = DEFAULT_SEASON) -> pd.DataFrame:
     """
@@ -75,7 +117,6 @@ def get_player_df(player_id: int, season: str = DEFAULT_SEASON) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Player game log data
     """
-    # keep a copy in session so sliders don't trigger new cache keys
     key = f"player_{player_id}_{season}"
     if key not in st.session_state:
         with st.spinner(f"Loading game log for player {player_id} in {season}..."):
@@ -87,10 +128,40 @@ def get_player_df(player_id: int, season: str = DEFAULT_SEASON) -> pd.DataFrame:
     
     return st.session_state[key]
 
-@st.cache_data(ttl=3600)  # 1 hour cache for player info
+def _parse_height_to_inches(height_str: str) -> int:
+    """
+    Parse height from "6-6" format to total inches.
+    
+    Args:
+        height_str: Height string in format like "6-6" or "6'6\""
+        
+    Returns:
+        int: Total height in inches
+    """
+    try:
+        # Handle different formats: "6-6", "6'6\"", "6'6", "6 6"
+        height_str = str(height_str).strip()
+        
+        # Replace common separators with dash
+        height_str = height_str.replace("'", "-").replace('"', "").replace(" ", "-")
+        
+        # Split by dash
+        parts = height_str.split("-")
+        if len(parts) >= 2:
+            feet = int(parts[0])
+            inches = int(parts[1])
+            return feet * 12 + inches
+        else:
+            # Try to parse as single number (assume inches)
+            return int(height_str)
+    except (ValueError, TypeError, IndexError):
+        # Default fallback
+        return 78  # 6'6"
+
+@st.cache_data(ttl=CACHE_TTL['player_info'])
 def get_player_info(player_id: int) -> dict:
     """
-    Get player biographical information from NBA API.
+    Get player biographical information from JSON file.
     
     Args:
         player_id: NBA player ID
@@ -99,39 +170,42 @@ def get_player_info(player_id: int) -> dict:
         dict: Player info including position, height, weight, etc.
     """
     try:
-        from nba_api.stats.endpoints import commonplayerinfo
-        player_info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
-        info_df = player_info.get_data_frames()[0]
+        url = get_data_url('player_info', player_id=player_id)
+        data = load_json(url)
         
-        if not info_df.empty:
-            row = info_df.iloc[0]
-            return {
-                'position': row.get('POSITION', 'Unknown'),
-                'height': row.get('HEIGHT', 'Unknown'),
-                'weight': row.get('WEIGHT', 'Unknown'),
-                'age': row.get('AGE', 0),
-                'team': row.get('TEAM_NAME', 'Unknown'),
-                'jersey': row.get('JERSEY', 'Unknown')
-            }
+        if 'player_info' in data:
+            info = data['player_info']
+            
+            # Parse height to inches if it's in string format
+            if 'height' in info and isinstance(info['height'], str):
+                info['height_inches'] = _parse_height_to_inches(info['height'])
+            
+            logger.info(f"✅ Loaded player info for {player_id}")
+            return info
         else:
-            return {
-                'position': 'Unknown',
-                'height': 'Unknown', 
-                'weight': 'Unknown',
-                'age': 0,
-                'team': 'Unknown',
-                'jersey': 'Unknown'
-            }
+            logger.warning(f"No 'player_info' key in JSON data for player {player_id}")
+            return _get_default_player_info()
+            
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            logger.warning(f"No player info found for player {player_id}")
+            return _get_default_player_info()
+        else:
+            raise
     except Exception as e:
-        print(f"Error fetching player info for {player_id}: {e}")
-        return {
-            'position': 'Unknown',
-            'height': 'Unknown',
-            'weight': 'Unknown', 
-            'age': 0,
-            'team': 'Unknown',
-            'jersey': 'Unknown'
-        }
+        logger.error(f"Failed to fetch player info for {player_id}: {e}")
+        return _get_default_player_info()
+
+def _get_default_player_info() -> dict:
+    """Get default player info when JSON file not found."""
+    return {
+        'position': 'Unknown',
+        'height': 'Unknown',
+        'weight': 'Unknown',
+        'age': 0,
+        'team': 'Unknown',
+        'jersey': 'Unknown'
+    }
 
 def get_player_season_stats(player_id: int, season: str = DEFAULT_SEASON) -> dict:
     """
@@ -254,3 +328,18 @@ def get_player_season_averages_df(player_id: int, season: str = DEFAULT_SEASON) 
     
     return df
 
+def get_data_status() -> Dict:
+    """
+    Get current data source status and configuration.
+    
+    Returns:
+        dict: Data source status information
+    """
+    from config import BASE_DATA_URL
+    
+    return {
+        'data_source': 'GitHub Pages JSON',
+        'base_url': BASE_DATA_URL,
+        'cache_enabled': True,
+        'cache_ttl': CACHE_TTL
+    }

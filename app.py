@@ -88,12 +88,24 @@ def get_player_image_url(player_id):
     """Get NBA.com player image URL"""
     return f"https://cdn.nba.com/headshots/nba/latest/260x190/{player_id}.png"
 
-def create_player_card(player_name, player_id, season_stats, fit_result, analysis_type):
-    """Create a player card using NBA API data."""
+def create_player_card_v6(player_name, player_id, season_stats, fit_result, analysis_type):
+    """Create a player card using Streamlit native components - NO HTML - FORCE REFRESH."""
     
     # Get player info from season stats
     if season_stats:
         age = season_stats.get('age', 0)
+        # Fix age if it's 0 by calculating from birthdate
+        if age == 0 and 'birthdate' in season_stats:
+            try:
+                from datetime import datetime
+                birthdate_str = season_stats.get('birthdate', '')
+                if birthdate_str:
+                    birthdate = datetime.strptime(birthdate_str.split('T')[0], '%Y-%m-%d')
+                    today = datetime.now()
+                    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+                    age = max(0, age)
+            except:
+                age = 0
         height = season_stats.get('height', 'Unknown')
         weight = season_stats.get('weight', 'Unknown')
         position = season_stats.get('position', 'Unknown')
@@ -136,180 +148,62 @@ def create_player_card(player_name, player_id, season_stats, fit_result, analysi
     team_redundancy = fit_result.get('team_redundancy', 0)
     upside = fit_result.get('upside', 0)
     
-    # Create custom CSS for the card (using the working structure)
-    card_css = """
-    <style>
-    .player-card {
-        background: #f5f5f5;
-        border-radius: 15px;
-        padding: 20px;
-        margin: 10px 0;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        border: 1px solid #f0f0f0;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .player-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-    .player-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 15px;
-        gap: 15px;
-        flex-wrap: nowrap;
-    }
-    .player-image {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #f0f0f0;
-        flex-shrink: 0;
-    }
-    .player-info {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-    }
-    .player-info h3 {
-        margin: 0;
-        color: #333;
-        font-size: 18px;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .player-info p {
-        margin: 5px 0 0 0;
-        color: #666;
-        font-size: 14px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 15px;
-        margin-top: 15px;
-    }
-    .stat-item {
-        text-align: center;
-        padding: 10px;
-        background: #e8e8e8;
-        border-radius: 8px;
-    }
-    .stat-value {
-        font-size: 20px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin: 0;
-    }
-    .stat-label {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin: 5px 0 0 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .main-score {
-        text-align: center;
-        margin: 20px 0;
-    }
-    .main-score-value {
-        font-size: 48px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin: 0;
-    }
-    .main-score-label {
-        font-size: 16px;
-        color: #7f8c8d;
-        margin: 5px 0 0 0;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    /* Hide Streamlit accessibility labels and internal text */
-    [aria-label*="keyboard"],
-    [aria-label*="arrow"],
-    [data-testid*="keyboard"],
-    [data-testid*="arrow"],
-    .stMetric [aria-label*="keyboard"],
-    .stMetric [aria-label*="arrow"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    </style>
-    """
+    # Create player card using Streamlit native components
+    # Player header
+    col1, col2, col3 = st.columns([1, 3, 1])
     
-    st.markdown(card_css, unsafe_allow_html=True)
+    with col1:
+        if player_id > 0:
+            st.image(get_player_image_url(player_id), width=80)
+        else:
+            st.write("No Image")
     
-    # Get player image URL
-    image_url = get_player_image_url(player_id)
+    with col2:
+        st.write(f"**{player_name}**")
+        st.write(f"{position} • {team} #{jersey}")
+        st.write(f"{height} • {weight} • Age {age}")
+        st.write(f"Games: {games_played}")
     
-    # Create the card HTML (using the working structure)
-    card_html = f"""
-    <div class="player-card">
-        <div class="player-header">
-            <div class="image-container">
-                <img src="{image_url}" alt="{player_name}" class="player-image" 
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="no-image-placeholder" style="display: none; width: 60px; height: 60px; border-radius: 50%; background: #f0f0f0; margin-right: 15px; align-items: center; justify-content: center; color: #999; font-size: 12px;">No Image</div>
-            </div>
-            <div class="player-info">
-                <h3>{player_name or 'Custom Player'}</h3>
-                <p>{position} • {team} #{jersey} • {CURRENT_SEASON}</p>
-                <p style="font-size: 12px; color: #666; margin: 0;">{height} • {weight} • Age {age} • {games_played} games</p>
-            </div>
-            <div class="main-score" style="margin-left: auto; text-align: right; padding-right: 10px; flex-shrink: 0; min-width: 120px;">
-                <div class="main-score-value" style="font-size: 36px; margin: 0; line-height: 1;">{fit_score:.1f}</div>
-                <div class="main-score-label" style="font-size: 12px; margin: 0; line-height: 1.2;">Overall Fit Score</div>
-            </div>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-item">
-                <p class="stat-value">{pts_avg:.1f}</p>
-                <p class="stat-label">PPG</p>
-            </div>
-            <div class="stat-item">
-                <p class="stat-value">{reb_avg:.1f}</p>
-                <p class="stat-label">RPG</p>
-            </div>
-            <div class="stat-item">
-                <p class="stat-value">{ast_avg:.1f}</p>
-                <p class="stat-label">APG</p>
-            </div>
-            <div class="stat-item">
-                <p class="stat-value">{fg_pct_display}</p>
-                <p class="stat-label">FG%</p>
-            </div>
-            <div class="stat-item">
-                <p class="stat-value">{fg3_pct_display}</p>
-                <p class="stat-label">3P%</p>
-            </div>
-            <div class="stat-item">
-                <p class="stat-value">{ft_pct_display}</p>
-                <p class="stat-label">FT%</p>
-            </div>
-        </div>
-        <div class="fit-scores" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
-                <span>Role Match: {role_match:.1f}</span>
-                <span>Scheme Fit: {scheme_fit:.1f}</span>
-                <span>Lineup Synergy: {lineup_synergy:.1f}</span>
-                <span>Team Redundancy: {team_redundancy:.1f}</span>
-                <span>Upside: {upside:.1f}</span>
-            </div>
-        </div>
-    </div>
-    """
+    with col3:
+        st.metric("Overall Fit", f"{fit_score:.1f}")
     
-    st.markdown(card_html, unsafe_allow_html=True)
+    st.divider()
+    
+    # Fit scores in big boxes (prominent)
+    st.write("**Fit Analysis**")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Role Match", f"{role_match:.1f}")
+    with col2:
+        st.metric("Scheme Fit", f"{scheme_fit:.1f}")
+    with col3:
+        st.metric("Lineup Synergy", f"{lineup_synergy:.1f}")
+    with col4:
+        st.metric("Team Redundancy", f"{team_redundancy:.1f}")
+    with col5:
+        st.metric("Upside", f"{upside:.1f}")
+    
+    st.divider()
+    
+    # Player stats in small text
+    st.write("**Season Stats**")
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        st.write(f"PPG: {pts_avg:.1f}")
+    with col2:
+        st.write(f"RPG: {reb_avg:.1f}")
+    with col3:
+        st.write(f"APG: {ast_avg:.1f}")
+    with col4:
+        st.write(f"FG%: {fg_pct_display}")
+    with col5:
+        st.write(f"3P%: {fg3_pct_display}")
+    with col6:
+        st.write(f"FT%: {ft_pct_display}")
 
 # Current NBA season constant
-CURRENT_SEASON = "2024-25"
 
 # Helper function to create human-readable feature labels
 def get_feature_labels():
@@ -410,14 +304,26 @@ def compute_scheme_vector(pace, three_point_volume, switchability, rim_pressure,
         'foul_avoidance': foul_avoidance
     })
 
-# Load active players using new data API
-with st.spinner("Loading active NBA players..."):
+# Load active players from JSON data
+with st.spinner("Loading active NBA players from JSON data..."):
     try:
         active_players_df = get_active_players_df()
         player_names = active_players_df['name'].tolist() if not active_players_df.empty else []
         name_to_id = dict(zip(active_players_df['name'], active_players_df['player_id']))
+        
+        if active_players_df.empty:
+            st.sidebar.warning("⚠️ Unable to load NBA players from JSON data.")
+            st.sidebar.info("💡 The JSON data files may not be available. Try refreshing the page, or use the Custom Player option below.")
+        else:
+            # Show data source status
+            from data_api import get_data_status
+            data_status = get_data_status()
+            st.sidebar.success(f"✅ Data source: {data_status['data_source']}")
+            st.sidebar.info(f"📊 Loaded {len(active_players_df)} active players")
     except Exception as e:
         st.sidebar.error(f"❌ Error loading players: {str(e)}")
+        st.sidebar.warning("⚠️ Unable to load JSON data. Please check your internet connection or try refreshing the page.")
+        st.sidebar.info("💡 You can still use the Custom Player option below to test the fit analysis.")
         active_players_df = pd.DataFrame()
         player_names = []
         name_to_id = {}
@@ -497,21 +403,18 @@ if player_source == "NBA Player":
                 # Load player stats using new data API with session state caching
                 player_stats_df = get_player_df(selected_player_id, CURRENT_SEASON)
                 if not player_stats_df.empty:
+                    # Get season stats for this player to pass to build_player_vector
+                    season_stats = get_player_season_stats(selected_player_id, CURRENT_SEASON)
                     feature_engineer = FeatureEngineer()
-                    # For NBA players, we want the TOT row or single row (not splits)
-                    if show_team_splits:
-                        # If showing splits, get the TOT row for the vector
-                        tot_row = player_stats_df[player_stats_df['TEAM_ABBREVIATION'] == 'TOT']
-                        if not tot_row.empty:
-                            player_vec = feature_engineer.build_player_vector(tot_row)
-                        else:
-                            # Use first row if no TOT
-                            player_vec = feature_engineer.build_player_vector(player_stats_df.iloc[:1])
-                    else:
-                        # Already have TOT or single row
-                        player_vec = feature_engineer.build_player_vector(player_stats_df)
+                    # Pass the full game log data to build_player_vector
+                    # The method will calculate season averages from all games
+                    player_vec = feature_engineer.build_player_vector(player_stats_df, season_stats, selected_player_id)
+                else:
+                    st.sidebar.warning(f"⚠️ No game data available for {selected_player} in {CURRENT_SEASON}")
+                    st.sidebar.info("💡 This player may not have played this season or the NBA API may be experiencing issues.")
             except Exception as e:
                 st.sidebar.error(f"❌ Error loading player stats: {str(e)}")
+                st.sidebar.warning("⚠️ The NBA API may be experiencing issues. Please try again in a few minutes.")
 
 else:  # Custom Player
     st.sidebar.subheader("Custom Player Stats")
@@ -586,9 +489,11 @@ if selected_player:
     st.sidebar.subheader("Lineup Analysis")
     
     # Starting lineup selection (4 players, excluding candidate)
+    # Filter out the candidate player from lineup options
+    lineup_options = [name for name in player_names if name != selected_player]
     starting_lineup_names = st.sidebar.multiselect(
         "Starting Lineup (without candidate):",
-        options=player_names,
+        options=lineup_options,
         default=[],
         max_selections=4,
         help="Select up to 4 NBA players for the starting lineup (excluding the candidate player)",
@@ -598,102 +503,118 @@ if selected_player:
     # Get starting lineup player IDs
     starting_lineup_ids = []
     if starting_lineup_names:
+        print(f"DEBUG: App - Selected lineup names: {starting_lineup_names}")
         for name in starting_lineup_names:
             player_id = name_to_id.get(name)
             if player_id:
                 starting_lineup_ids.append(player_id)
-else:
-    # No roster selection when no player is selected
-    starting_lineup_ids = []
-    full_roster_ids = []
-
-# Build roster summary if players are selected (works for both NBA and custom players)
-roster_summary = None
-if starting_lineup_ids:
-    try:
-        from core.context import summarize_roster
-        from core.features import FeatureEngineer
-        
-        feature_engineer = FeatureEngineer()
-        lineup_vectors = []
-        
-        for player_id in starting_lineup_ids:
-            try:
-                player_stats_df = get_player_df(player_id, CURRENT_SEASON)
-                if not player_stats_df.empty:
-                    player_vec = feature_engineer.build_player_vector(player_stats_df)
-                    lineup_vectors.append(player_vec)
-            except Exception as e:
-                print(f"Error loading player {player_id}: {e}")
-                continue
-        
-        if lineup_vectors:
-            roster_summary = summarize_roster(lineup_vectors)
-    except Exception as e:
-        st.sidebar.warning(f"❌ Error analyzing roster: {str(e)}")
-        roster_summary = None
-
-# Score player fit
-lineup_fit_result = None
-
-if player_vec is not None:
-    if roster_summary:
-        # Create lineup summary for fit analysis
-        lineup_summary = {
-            'lineup_vectors': roster_summary.get('lineup_vectors', []),
-            'lineup_centroid': roster_summary.get('lineup_centroid', {}),
-        }
-        
-        print(f"DEBUG: App - lineup_summary keys: {list(lineup_summary.keys())}")
-        print(f"DEBUG: App - scheme_vec: {scheme_vec}")
-        print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
-        
-        lineup_fit_result = score_player(player_vec, scheme_vec, lineup_summary, consider_scheme_fit)
+        print(f"DEBUG: App - Starting lineup IDs: {starting_lineup_ids}")
     else:
-        # For custom players or when no roster is selected, score without roster context
-        print(f"DEBUG: App - No roster selected, scoring without roster context")
-        print(f"DEBUG: App - scheme_vec: {scheme_vec}")
-        print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
-        
-        lineup_fit_result = score_player(player_vec, scheme_vec, None, consider_scheme_fit)
-
-
-# Display lineup fit analysis with beautiful player card
-if lineup_fit_result is not None:
-    st.subheader("Lineup Fit Analysis")
+        print("DEBUG: App - No lineup names selected")
     
-    # Create beautiful player card with NBA API data
-    if player_source == "NBA Player" and selected_player_id:
-        season_stats = get_player_season_stats(selected_player_id, CURRENT_SEASON)
-        create_player_card(selected_player, selected_player_id, season_stats, lineup_fit_result, "Lineup Fit")
-    else:
-        # For custom players, use placeholder data
-        create_player_card(selected_player, 0, {}, lineup_fit_result, "Lineup Fit")
+    # Build roster summary if players are selected
+    roster_summary = None
+    if starting_lineup_ids:
+        try:
+            from core.context import summarize_roster
+            from core.features import FeatureEngineer
+            
+            feature_engineer = FeatureEngineer()
+            lineup_vectors = []
+            
+            for player_id in starting_lineup_ids:
+                try:
+                    player_stats_df = get_player_df(player_id, CURRENT_SEASON)
+                    if not player_stats_df.empty:
+                        # Get season stats for this player to pass to build_player_vector
+                        try:
+                            player_season_stats = get_player_season_stats(player_id, CURRENT_SEASON)
+                            lineup_player_vec = feature_engineer.build_player_vector(player_stats_df, player_season_stats, player_id)
+                            lineup_vectors.append(lineup_player_vec)
+                        except Exception as e:
+                            print(f"Error getting season stats for player {player_id}: {e}")
+                            # Fallback without season stats
+                            lineup_player_vec = feature_engineer.build_player_vector(player_stats_df, None, player_id)
+                            lineup_vectors.append(lineup_player_vec)
+                except Exception as e:
+                    print(f"Error loading player {player_id}: {e}")
+                    continue
+            
+            if lineup_vectors:
+                print(f"DEBUG: App - Created {len(lineup_vectors)} lineup vectors")
+                print(f"DEBUG: App - First lineup vector keys: {list(lineup_vectors[0].keys()) if lineup_vectors else 'None'}")
+                print(f"DEBUG: App - Lineup vector PLAYER_IDs: {[vec.get('PLAYER_ID') for vec in lineup_vectors]}")
+                roster_summary = summarize_roster(lineup_vectors)
+                print(f"DEBUG: App - Roster summary keys: {list(roster_summary.keys()) if roster_summary else 'None'}")
+            else:
+                print("DEBUG: App - No lineup vectors created")
+                roster_summary = None
+        except Exception as e:
+            st.sidebar.warning(f"❌ Error analyzing roster: {str(e)}")
+            print(f"DEBUG: App - Roster analysis error: {str(e)}")
+            roster_summary = None
     
+    # Score player fit
+    lineup_fit_result = None
     
-    # Show visualization message for custom players
-    if player_source == "Custom Player":
-        st.info("📊 Visualizations are not currently available for custom players. This feature will be added in a future update.")
-    
-
-# Display lineup summary if available
-if roster_summary:
-    # Display lineup analysis
-    if roster_summary.get('lineup_vectors'):
-        st.markdown("---")  # Add a clean separator
-        st.subheader("Lineup Analysis")
-        lineup_players_count = len(roster_summary['lineup_vectors'])
-        if player_vec is not None:
-            total_analyzing = lineup_players_count + 1
-            st.write(f"Analyzing {total_analyzing} starting lineup players ({lineup_players_count} selected + 1 candidate)")
+    if player_vec is not None:
+        if roster_summary:
+            # Create lineup summary for fit analysis
+            lineup_summary = {
+                'lineup_vectors': roster_summary.get('lineup_vectors', []),
+                'lineup_centroid': roster_summary.get('lineup_centroid', {}),
+            }
+            
+            print(f"DEBUG: App - lineup_summary keys: {list(lineup_summary.keys())}")
+            print(f"DEBUG: App - lineup_vectors count: {len(lineup_summary.get('lineup_vectors', []))}")
+            print(f"DEBUG: App - scheme_vec: {scheme_vec}")
+            print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
+            
+            print(f"DEBUG: App - About to score player {player_vec.get('PLAYER_ID')} against lineup with {len(lineup_summary.get('lineup_vectors', []))} teammates")
+            lineup_fit_result = score_player(player_vec, scheme_vec, lineup_summary, consider_scheme_fit)
         else:
-            st.write(f"Analyzing {lineup_players_count} starting lineup players")
+            # For custom players or when no roster is selected, score without roster context
+            print(f"DEBUG: App - No roster selected, scoring without roster context")
+            print(f"DEBUG: App - scheme_vec: {scheme_vec}")
+            print(f"DEBUG: App - consider_scheme_fit: {consider_scheme_fit}")
+            
+            lineup_fit_result = score_player(player_vec, scheme_vec, None, consider_scheme_fit)
+    
+    # Display lineup fit analysis with beautiful player card
+    if lineup_fit_result is not None:
+        st.subheader("Lineup Fit Analysis")
         
-        # Show starting lineup centroid
-        if roster_summary.get('lineup_centroid'):
-            centroid_df = create_centroid_table(roster_summary['lineup_centroid'], "Starting Lineup")
-            if centroid_df is not None:
-                st.dataframe(centroid_df, use_container_width=True, hide_index=True, height=400)
+        # Create beautiful player card with NBA API data
+        if player_source == "NBA Player" and selected_player_id:
+            season_stats = get_player_season_stats(selected_player_id, CURRENT_SEASON)
+            create_player_card_v6(selected_player, selected_player_id, season_stats, lineup_fit_result, "Lineup Fit")
+        else:
+            # For custom players, use placeholder data
+            create_player_card_v6(selected_player, 0, {}, lineup_fit_result, "Lineup Fit")
+        
+        
+        # Show visualization message for custom players
+        if player_source == "Custom Player":
+            st.info("📊 Visualizations are not currently available for custom players. This feature will be added in a future update.")
+        
+        # Display lineup summary if available
+        if roster_summary:
+            # Display lineup analysis
+            if roster_summary.get('lineup_vectors'):
+                st.markdown("---")  # Add a clean separator
+                st.subheader("Lineup Analysis")
+                lineup_players_count = len(roster_summary['lineup_vectors'])
+                if player_vec is not None:
+                    total_analyzing = lineup_players_count + 1
+                    st.write(f"Analyzing {total_analyzing} starting lineup players ({lineup_players_count} selected + 1 candidate)")
+                else:
+                    st.write(f"Analyzing {lineup_players_count} starting lineup players")
+                
+                # Show starting lineup centroid
+                if roster_summary.get('lineup_centroid'):
+                    centroid_df = create_centroid_table(roster_summary['lineup_centroid'], "Starting Lineup")
+                    if centroid_df is not None:
+                        st.dataframe(centroid_df, use_container_width=True, hide_index=True, height=400)
                 
                 # Add download button for CSV
                 csv_data = centroid_df.to_csv(index=False)
@@ -840,12 +761,14 @@ if player_vec is not None:
             st.plotly_chart(fig_bar, use_container_width=True)
     else:
         st.plotly_chart(fig, use_container_width=True)
-elif selected_player and player_source == "NBA Player" and player_stats_df is not None and player_stats_df.empty:
-    st.warning(f"No stats available for {selected_player} in the {CURRENT_SEASON} season")
-elif selected_player and player_source == "NBA Player" and 'unique_seasons' in locals() and not unique_seasons:
-    st.warning(f"No career data available for {selected_player}")
-elif selected_player and player_source == "NBA Player" and player_stats_df is None:
-    st.info("Loading player statistics...")
+    
+    # Handle cases where no stats are available
+    if selected_player and player_source == "NBA Player" and player_stats_df is not None and player_stats_df.empty:
+        st.warning(f"No stats available for {selected_player} in the {CURRENT_SEASON} season")
+    if selected_player and player_source == "NBA Player" and 'unique_seasons' in locals() and not unique_seasons:
+        st.warning(f"No career data available for {selected_player}")
+    if selected_player and player_source == "NBA Player" and player_stats_df is None:
+        st.info("Loading player statistics...")
 
 # Masthead at the bottom
 st.markdown("""

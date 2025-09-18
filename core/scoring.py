@@ -248,6 +248,11 @@ def get_position(player_vec):
         str: Player position (PG, SG, SF, PF, C)
     """
     height = player_vec.get('height_in', 78)
+    # Ensure height is an integer
+    try:
+        height = int(height)
+    except (ValueError, TypeError):
+        height = 78  # Default fallback
     player_id = player_vec.get('PLAYER_ID')
     
     # Known position corrections for players where NBA API is wrong
@@ -692,8 +697,16 @@ def score_player(player_vec: Dict[str, Any], scheme_vec: Dict[str, Any], roster_
     print("DEBUG: Player vector age value:", player_vec.get("age", "NOT_FOUND"))
     
     age = float(player_vec.get("age", 27))  # default if missing
-    upside = 100 - (age - 20) * 2
-    upside = np.clip(upside, 0, 100)
+    
+    # Fix upside calculation to be less aggressive and handle age=0 case
+    if age == 0:
+        # If age is unknown, use neutral upside (50)
+        upside = 50.0
+    else:
+        # More reasonable upside formula: peak at 22, decline gradually
+        # Age 22: 100, Age 25: 85, Age 30: 60, Age 35: 35
+        upside = 100 - (age - 22) * 8
+        upside = np.clip(upside, 0, 100)
     
     # Debug print statement to verify different players produce different upside values
     print(f"DEBUG: Upside age: {age} -> {upside}")

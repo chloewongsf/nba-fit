@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, Optional
 from datetime import date, datetime
-from nba_api.stats.endpoints import commonplayerinfo
 
 
 class FeatureEngineer:
@@ -26,114 +25,91 @@ class FeatureEngineer:
         # Fallback ages for well-known players (as of 2024-25 season)
         self.known_player_ages = {
             201935: 36,  # Stephen Curry
+            201939: 36,  # Stephen Curry (alternative ID)
             2544: 40,    # LeBron James
             203081: 25,  # Luka Doncic
             201142: 35,  # Kevin Durant
             1629029: 26, # Zion Williamson
             203999: 26,  # Jayson Tatum
             201566: 35,  # Russell Westbrook
-            201939: 35,  # Stephen Curry (alternative ID)
             203507: 30,  # Giannis Antetokounmpo
             201980: 34,  # James Harden
             202681: 33,  # Kyrie Irving
             203954: 29,  # Joel Embiid
-            201935: 36,  # Stephen Curry (primary ID)
-            203999: 26,  # Jayson Tatum
-            1629029: 26, # Zion Williamson
-            203507: 30,  # Giannis Antetokounmpo
-            201142: 35,  # Kevin Durant
-            2544: 40,    # LeBron James
-            203081: 25,  # Luka Doncic
+            1630173: 25, # Precious Achiuwa
+            203110: 34,  # Draymond Green
+            202691: 34,  # Klay Thompson
+            203952: 30,  # Andrew Wiggins
         }
     
-    def get_player_age(self, player_id: int) -> int:
+    def _parse_height_to_inches(self, height_str: str) -> int:
         """
-        Get the real age of a player by fetching their birth date from NBA API.
+        Parse height from "6-6" format to total inches.
+        
+        Args:
+            height_str: Height string in format like "6-6" or "6'6\""
+            
+        Returns:
+            int: Total height in inches
+        """
+        try:
+            # Handle different formats: "6-6", "6'6\"", "6'6", "6 6"
+            height_str = str(height_str).strip()
+            
+            # Replace common separators with dash
+            height_str = height_str.replace("'", "-").replace('"', "").replace(" ", "-")
+            
+            # Split by dash
+            parts = height_str.split("-")
+            if len(parts) >= 2:
+                feet = int(parts[0])
+                inches = int(parts[1])
+                return feet * 12 + inches
+            else:
+                # Try to parse as single number (assume inches)
+                return int(height_str)
+        except (ValueError, TypeError, IndexError):
+            # Default fallback
+            return 78  # 6'6"
+    
+    def get_player_age(self, player_id: int, season_stats: Dict = None) -> int:
+        """
+        Get player age from season stats or fallback to known ages.
         
         Args:
             player_id: NBA player ID
+            season_stats: Dictionary containing player season stats with age info
             
         Returns:
-            Player's current age in years
+            Player age in years
         """
-        try:
-            print(f"DEBUG: Fetching age for player ID: {player_id}")
-            
-            # Get player info from NBA API with timeout
-            import time
-            start_time = time.time()
-            info = commonplayerinfo.CommonPlayerInfo(player_id=player_id).get_normalized_dict()
-            end_time = time.time()
-            print(f"DEBUG: API call took {end_time - start_time:.2f} seconds")
-            
-            print(f"DEBUG: API response keys: {list(info.keys())}")
-            
-            # Extract birth date from the response
-            if 'CommonPlayerInfo' in info and len(info['CommonPlayerInfo']) > 0:
-                player_info = info['CommonPlayerInfo'][0]
-                print(f"DEBUG: Player info keys: {list(player_info.keys())}")
-                
-                dob_str = player_info.get('BIRTHDATE', '')
-                print(f"DEBUG: Raw DOB string: '{dob_str}'")
-                
-                if dob_str:
-                    # Parse the birth date
-                    # Handle different date formats
-                    if 'T' in dob_str:
-                        # Format: '1988-03-14T00:00:00'
-                        dob = datetime.strptime(dob_str.split('T')[0], "%Y-%m-%d").date()
-                    else:
-                        # Format: '03/14/1988'
-                        dob = datetime.strptime(dob_str, "%m/%d/%Y").date()
-                    
-                    # Calculate current age
-                    today = date.today()
-                    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-                    
-                    print(f"DEBUG: Player {player_id} DOB: {dob_str} Age: {age}")
-                    
-                    return age
-                else:
-                    print(f"DEBUG: No BIRTHDATE found for player {player_id}")
-                    return 26
-            else:
-                print(f"DEBUG: No CommonPlayerInfo found for player {player_id}")
-                return 26
-            
-        except Exception as e:
-            print(f"DEBUG: Error fetching age for player {player_id}: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Try fallback dictionary for well-known players
-            if player_id in self.known_player_ages:
-                fallback_age = self.known_player_ages[player_id]
-                print(f"DEBUG: Using fallback age {fallback_age} for player {player_id}")
-                return fallback_age
-            
-            # Last resort: simulated age based on player ID
-            simulated_age = 20 + (player_id % 20)  # Age range: 20-39
-            print(f"DEBUG: Using simulated age {simulated_age} for player {player_id} (last resort)")
-            return simulated_age
-    
-    def test_nba_api(self, player_id: int = 201935) -> bool:
-        """
-        Test if NBA API is accessible by trying to fetch a known player (Stephen Curry).
+        # Try to get age from season stats first
+        if season_stats and 'age' in season_stats and season_stats['age'] > 0:
+            print(f"DEBUG: Retrieved age {season_stats['age']} for player_id {player_id}")
+            return season_stats['age']
         
-        Args:
-            player_id: Player ID to test with (default: Stephen Curry)
-            
-        Returns:
-            True if API is accessible, False otherwise
-        """
-        try:
-            print(f"DEBUG: Testing NBA API with player ID: {player_id}")
-            info = commonplayerinfo.CommonPlayerInfo(player_id=player_id).get_normalized_dict()
-            print(f"DEBUG: API test successful, response keys: {list(info.keys())}")
-            return True
-        except Exception as e:
-            print(f"DEBUG: NBA API test failed: {e}")
-            return False
+        # Try to calculate from birthdate in season stats
+        if season_stats and 'birthdate' in season_stats:
+            try:
+                birthdate_str = season_stats['birthdate']
+                if birthdate_str:
+                    birthdate = datetime.strptime(birthdate_str.split('T')[0], '%Y-%m-%d')
+                    today = date.today()
+                    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+                    print(f"DEBUG: Calculated age {age} from birthdate for player_id {player_id}")
+                    return max(0, age)
+            except Exception as e:
+                print(f"DEBUG: Error calculating age from birthdate for player {player_id}: {e}")
+        
+        # Fallback to known ages
+        if player_id in self.known_player_ages:
+            print(f"DEBUG: Using known age {self.known_player_ages[player_id]} for player_id {player_id}")
+            return self.known_player_ages[player_id]
+        
+        # Default fallback age
+        print(f"DEBUG: Using default age 25 for player_id {player_id}")
+        return 25
+    
     
     def create_features(self, player_data: Dict[str, Any], team_data: Dict[str, Any]) -> Dict[str, float]:
         """
@@ -308,12 +284,13 @@ class FeatureEngineer:
         """
         return self.feature_weights.copy()
 
-    def build_player_vector(self, stats_df: pd.DataFrame) -> Dict[str, float]:
+    def build_player_vector(self, stats_df: pd.DataFrame, season_stats: Dict = None, player_id: int = None) -> Dict[str, float]:
         """
-        Build a player vector from per-game statistics.
+        Build a player vector from game log statistics.
         
         Args:
-            stats_df: DataFrame containing a single row of per-game stats (TOT or single-team)
+            stats_df: DataFrame containing game log data (multiple rows, one per game)
+            season_stats: Dictionary containing season averages and player info
             
         Returns:
             Dictionary containing computed player metrics and placeholders
@@ -321,50 +298,49 @@ class FeatureEngineer:
         if stats_df.empty:
             return {}
         
-        # Get the first (and only) row
-        row = stats_df.iloc[0]
-        
-        # Compute derived metrics
+        # Calculate season averages from game log data
         player_vector = {}
         
-        # Three-point rate
-        fga = row.get('FGA', 0)
-        fg3a = row.get('FG3A', 0)
-        if fga > 0:
-            player_vector['three_rate'] = fg3a / fga
+        # Three-point rate (from season averages)
+        total_fga = stats_df['FGA'].sum() if 'FGA' in stats_df.columns else 0
+        total_fg3a = stats_df['FG3A'].sum() if 'FG3A' in stats_df.columns else 0
+        if total_fga > 0:
+            player_vector['three_rate'] = total_fg3a / total_fga
         else:
             player_vector['three_rate'] = 0.0
         
-        # Free throw rate
-        fta = row.get('FTA', 0)
-        if fga > 0:
-            player_vector['ft_rate'] = fta / fga
+        # Free throw rate (from season averages)
+        total_fta = stats_df['FTA'].sum() if 'FTA' in stats_df.columns else 0
+        if total_fga > 0:
+            player_vector['ft_rate'] = total_fta / total_fga
         else:
             player_vector['ft_rate'] = 0.0
         
-        # Assist percentage (rough proxy)
-        ast = row.get('AST', 0)
-        player_vector['ast_pct'] = ast * 5
+        # Assist percentage (from season averages)
+        avg_ast = stats_df['AST'].mean() if 'AST' in stats_df.columns else 0
+        player_vector['ast_pct'] = avg_ast * 5
         
-        # Turnover percentage (rough proxy)
-        tov = row.get('TOV', 0)
-        player_vector['tov_pct'] = tov * 3
+        # Turnover percentage (from season averages)
+        avg_tov = stats_df['TOV'].mean() if 'TOV' in stats_df.columns else 0
+        player_vector['tov_pct'] = avg_tov * 3
         
-        # Steal percentage
-        stl = row.get('STL', 0)
-        player_vector['stl_pct'] = stl * 2
+        # Steal percentage (from season averages)
+        avg_stl = stats_df['STL'].mean() if 'STL' in stats_df.columns else 0
+        player_vector['stl_pct'] = avg_stl * 2
         
-        # Block percentage
-        blk = row.get('BLK', 0)
-        player_vector['blk_pct'] = blk * 2.5
+        # Block percentage (from season averages)
+        avg_blk = stats_df['BLK'].mean() if 'BLK' in stats_df.columns else 0
+        player_vector['blk_pct'] = avg_blk * 2.5
         
-        # Defensive rebound percentage (fallback to total rebounds)
-        dreb = row.get('DREB', None)
-        if dreb is not None:
-            player_vector['dreb_pct'] = dreb * 3
+        # Defensive rebound percentage (from season averages)
+        if 'DREB' in stats_df.columns:
+            avg_dreb = stats_df['DREB'].mean()
+            player_vector['dreb_pct'] = avg_dreb * 3
+        elif 'REB' in stats_df.columns:
+            avg_reb = stats_df['REB'].mean()
+            player_vector['dreb_pct'] = avg_reb * 3
         else:
-            reb = row.get('REB', 0)
-            player_vector['dreb_pct'] = reb * 3
+            player_vector['dreb_pct'] = 0.0
         
         # Placeholder metrics (to be replaced with real data later)
         player_vector['catch_shoot'] = 0.30
@@ -373,41 +349,61 @@ class FeatureEngineer:
         player_vector['switchability'] = 0.5
         player_vector['rim_protect'] = 0.3
         
-        # Bio data (use from stats if available, otherwise placeholders)
-        # Get real age from NBA API using player's birth date
-        player_id = row.get('PLAYER_ID', 0)
+        # Bio data (use from season stats if available, otherwise placeholders)
+        if player_id is None:
+            player_id = stats_df.iloc[0].get('PLAYER_ID', 0) if not stats_df.empty else 0
         print(f"DEBUG: Building player vector for player_id: {player_id}")
         
-        # Test API first
-        if not hasattr(self, '_api_tested'):
-            self._api_tested = True
-            api_works = self.test_nba_api()
-            print(f"DEBUG: NBA API test result: {api_works}")
-        
-        real_age = self.get_player_age(player_id)
+        # Get age from season stats or fallback
+        real_age = self.get_player_age(player_id, season_stats)
         print(f"DEBUG: Retrieved age {real_age} for player_id {player_id}")
         
         player_vector['age'] = real_age
-        player_vector['height_in'] = row.get('HEIGHT_IN', 78)
-        player_vector['weight_lb'] = row.get('WEIGHT_LB', 215)
+        
+        # Get height and weight from season stats
+        if season_stats:
+            # Use parsed height if available, otherwise parse it
+            if 'height_inches' in season_stats:
+                player_vector['height_in'] = season_stats['height_inches']
+            else:
+                # Fallback: parse height from string format
+                height_str = season_stats.get('height', '6-6')
+                player_vector['height_in'] = self._parse_height_to_inches(height_str)
+            
+            # Parse weight from string to int
+            weight_str = season_stats.get('weight', '215')
+            try:
+                player_vector['weight_lb'] = int(weight_str)
+            except (ValueError, TypeError):
+                player_vector['weight_lb'] = 215
+        else:
+            player_vector['height_in'] = 78
+            player_vector['weight_lb'] = 215
         
         # Add PLAYER_ID for redundancy calculation
         player_vector['PLAYER_ID'] = player_id
         
-        # Get position from NBA API
-        try:
-            player_info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
-            info_df = player_info.get_data_frames()[0]
-            if not info_df.empty:
-                position = info_df.iloc[0].get('POSITION', '')
-                player_vector['POSITION'] = position
-                print(f"DEBUG: Retrieved position '{position}' for player_id {player_id}")
-            else:
-                player_vector['POSITION'] = None
-                print(f"DEBUG: No position data found for player_id {player_id}")
-        except Exception as e:
-            player_vector['POSITION'] = None
-            print(f"DEBUG: Error fetching position for player_id {player_id}: {e}")
+        # Get position from season stats or fallback
+        if season_stats and 'position' in season_stats:
+            position = season_stats['position']
+            player_vector['POSITION'] = position
+            print(f"DEBUG: Retrieved position '{position}' from season stats for player_id {player_id}")
+        else:
+            # Fallback to known positions for well-known players
+            known_positions = {
+                201935: 'PG',  # Stephen Curry
+                2544: 'SF',    # LeBron James
+                203081: 'PG',  # Luka Doncic
+                201142: 'SF',  # Kevin Durant
+                203999: 'SF',  # Jayson Tatum
+                203507: 'PF',  # Giannis Antetokounmpo
+                201980: 'PG',  # James Harden
+                202681: 'PG',  # Kyrie Irving
+                203954: 'C',   # Joel Embiid
+            }
+            position = known_positions.get(player_id, 'SF')  # Default to SF
+            player_vector['POSITION'] = position
+            print(f"DEBUG: Using fallback position '{position}' for player_id {player_id}")
         
         return player_vector
 
