@@ -693,23 +693,30 @@ def score_player(player_vec: Dict[str, Any], scheme_vec: Dict[str, Any], roster_
     # Age 20 = 100, Age 25 = 90, Age 30 = 80, Age 35 = 70, Age 40 = 60
     
     # Debug: Check what's actually in the player vector
-    print("DEBUG: Player vector keys:", list(player_vec.keys()))
-    print("DEBUG: Player vector age value:", player_vec.get("age", "NOT_FOUND"))
-    
     age = float(player_vec.get("age", 27))  # default if missing
     
-    # Fix upside calculation to be less aggressive and handle age=0 case
+    # Fix upside calculation to be more realistic and handle age=0 case
     if age == 0:
         # If age is unknown, use neutral upside (50)
         upside = 50.0
     else:
-        # More reasonable upside formula: peak at 22, decline gradually
-        # Age 22: 100, Age 25: 85, Age 30: 60, Age 35: 35
-        upside = 100 - (age - 22) * 8
+        # More realistic upside formula: peak at 22, decline more gradually
+        # Age 22: 100, Age 25: 90, Age 30: 70, Age 35: 50, Age 37: 42, Age 40: 30
+        # Uses a gentler decline curve that doesn't hit 0 until much later
+        if age <= 22:
+            upside = 100.0
+        elif age <= 30:
+            # Gentle decline from 22-30: 100 to 70
+            upside = 100 - (age - 22) * 3.75
+        elif age <= 40:
+            # Slower decline from 30-40: 70 to 30
+            upside = 70 - (age - 30) * 4
+        else:
+            # Very slow decline after 40: minimum 20
+            upside = max(20, 30 - (age - 40) * 1)
+        
         upside = np.clip(upside, 0, 100)
     
-    # Debug print statement to verify different players produce different upside values
-    print(f"DEBUG: Upside age: {age} -> {upside}")
     
     # 6. Compute fit score using weighted combination of all components (0-100 scale)
     # Rebalanced weights: Role Match 30%, Scheme Fit 20%, Synergy 25%, Redundancy 15%, Upside 10%

@@ -94,9 +94,6 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     # Get player info from season stats
     if season_stats:
         age = season_stats.get('age', 0)
-        # DEBUG: Show what age value we're getting
-        st.write(f"🔍 DEBUG: Age from season_stats: {age}")
-        st.write(f"🔍 DEBUG: Birthdate from season_stats: {season_stats.get('birthdate', 'NOT_FOUND')}")
         # Fix age if it's 0 by calculating from birthdate
         if age == 0 and 'birthdate' in season_stats:
             try:
