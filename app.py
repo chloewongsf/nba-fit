@@ -94,6 +94,9 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     # Get player info from season stats
     if season_stats:
         age = season_stats.get('age', 0)
+        # DEBUG: Show what age value we're getting
+        st.write(f"🔍 DEBUG: Age from season_stats: {age}")
+        st.write(f"🔍 DEBUG: Birthdate from season_stats: {season_stats.get('birthdate', 'NOT_FOUND')}")
         # Fix age if it's 0 by calculating from birthdate
         if age == 0 and 'birthdate' in season_stats:
             try:
@@ -360,6 +363,11 @@ scheme_vec = compute_scheme_vector(pace, three_point_volume, switchability, rim_
 # Scheme fit toggle
 consider_scheme_fit = st.sidebar.checkbox("Consider Scheme Fit", value=True)
 
+
+# Cache management
+if st.sidebar.button("🔄 Clear Cache & Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
 
 # Season selection
 CURRENT_SEASON = st.sidebar.selectbox(
