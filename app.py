@@ -89,7 +89,7 @@ def get_player_image_url(player_id):
     return f"https://cdn.nba.com/headshots/nba/latest/260x190/{player_id}.png"
 
 def create_player_card_v6(player_name, player_id, season_stats, fit_result, analysis_type):
-    """Create a sleek player card with image, stats, and fit analysis."""
+    """Create a player card using Streamlit native components - NO HTML - FORCE REFRESH."""
     
     # Get player info from season stats
     if season_stats:
@@ -122,9 +122,9 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
         games_played = season_stats.get('games_played', 0)
         
         # Format percentages
-        fg_pct_display = f"{fg_pct*100:.1f}%" if fg_pct > 0 else "N/A"
-        fg3_pct_display = f"{fg3_pct*100:.1f}%" if fg3_pct > 0 else "N/A"
-        ft_pct_display = f"{ft_pct*100:.1f}%" if ft_pct > 0 else "N/A"
+        fg_pct_display = f"{fg_pct:.1%}" if fg_pct > 0 else "N/A"
+        fg3_pct_display = f"{fg3_pct:.1%}" if fg3_pct > 0 else "N/A"
+        ft_pct_display = f"{ft_pct:.1%}" if ft_pct > 0 else "N/A"
     else:
         age = 0
         height = 'Unknown'
@@ -148,207 +148,74 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     team_redundancy = fit_result.get('team_redundancy', 0)
     upside = fit_result.get('upside', 0)
     
-    # Create custom CSS for the card
-    card_css = """
-    <style>
-    .player-card {
-        background: white;
-        border-radius: 15px;
+    # Create player card using Streamlit native components with proper container
+    # Use a custom container with background styling
+    st.markdown("""
+    <div style="
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
         padding: 20px;
         margin: 10px 0;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        border: 1px solid #f0f0f0;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .player-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-    .player-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .player-image {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 15px;
-        border: 3px solid #f0f0f0;
-    }
-    .player-info h3 {
-        margin: 0;
-        color: #333;
-        font-size: 20px;
-        font-weight: 600;
-    }
-    .player-info p {
-        margin: 5px 0 0 0;
-        color: #666;
-        font-size: 14px;
-    }
-    .fit-score {
-        margin-left: auto;
-        text-align: center;
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 10px;
-        min-width: 100px;
-    }
-    .fit-score-value {
-        font-size: 24px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin: 0;
-    }
-    .fit-score-label {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin: 5px 0 0 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .stats-section {
-        margin-top: 20px;
-    }
-    .section-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 15px;
-        text-align: center;
-    }
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .season-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 15px;
-    }
-    .stat-item {
-        text-align: center;
-        padding: 12px;
-        background: #f8f9fa;
-        border-radius: 8px;
-    }
-    .stat-value {
-        font-size: 18px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin: 0;
-    }
-    .stat-label {
-        font-size: 11px;
-        color: #7f8c8d;
-        margin: 5px 0 0 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .season-stat-value {
-        font-size: 16px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin: 0;
-    }
-    .season-stat-label {
-        font-size: 10px;
-        color: #7f8c8d;
-        margin: 3px 0 0 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    </style>
-    """
+    ">
+    """, unsafe_allow_html=True)
     
-    st.markdown(card_css, unsafe_allow_html=True)
+    # Player header
+    col1, col2, col3 = st.columns([1, 3, 1])
     
-    # Get player image URL
-    image_url = get_player_image_url(player_id)
+    with col1:
+        if player_id > 0:
+            st.image(get_player_image_url(player_id), width=80)
+        else:
+            st.write("No Image")
     
-    # Create the card HTML
-    card_html = f"""
-    <div class="player-card">
-        <div class="player-header">
-            <div class="image-container">
-                <img src="{image_url}" alt="{player_name}" class="player-image" 
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="no-image-placeholder" style="display: none; width: 80px; height: 80px; border-radius: 50%; background: #f0f0f0; margin-right: 15px; align-items: center; justify-content: center; color: #999; font-size: 12px;">No Image</div>
-            </div>
-            <div class="player-info">
-                <h3>{player_name}</h3>
-                <p>{position} • {team} #{jersey}</p>
-                <p>{height} • {weight} • Age {age} • {games_played} games</p>
-            </div>
-            <div class="fit-score">
-                <p class="fit-score-value">{fit_score:.1f}</p>
-                <p class="fit-score-label">Overall Fit</p>
-            </div>
-        </div>
-        
-        <div class="stats-section">
-            <div class="section-title">Fit Analysis</div>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <p class="stat-value">{role_match:.1f}</p>
-                    <p class="stat-label">Role Match</p>
-                </div>
-                <div class="stat-item">
-                    <p class="stat-value">{scheme_fit:.1f}</p>
-                    <p class="stat-label">Scheme Fit</p>
-                </div>
-                <div class="stat-item">
-                    <p class="stat-value">{lineup_synergy:.1f}</p>
-                    <p class="stat-label">Lineup Synergy</p>
-                </div>
-                <div class="stat-item">
-                    <p class="stat-value">{team_redundancy:.1f}</p>
-                    <p class="stat-label">Team Redundancy</p>
-                </div>
-                <div class="stat-item">
-                    <p class="stat-value">{upside:.1f}</p>
-                    <p class="stat-label">Upside</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="stats-section">
-            <div class="section-title">Season Stats</div>
-            <div class="season-stats-grid">
-                <div class="stat-item">
-                    <p class="season-stat-value">{pts_avg:.1f}</p>
-                    <p class="season-stat-label">PPG</p>
-                </div>
-                <div class="stat-item">
-                    <p class="season-stat-value">{reb_avg:.1f}</p>
-                    <p class="season-stat-label">RPG</p>
-                </div>
-                <div class="stat-item">
-                    <p class="season-stat-value">{ast_avg:.1f}</p>
-                    <p class="season-stat-label">APG</p>
-                </div>
-                <div class="stat-item">
-                    <p class="season-stat-value">{fg_pct_display}</p>
-                    <p class="season-stat-label">FG%</p>
-                </div>
-                <div class="stat-item">
-                    <p class="season-stat-value">{fg3_pct_display}</p>
-                    <p class="season-stat-label">3P%</p>
-                </div>
-                <div class="stat-item">
-                    <p class="season-stat-value">{ft_pct_display}</p>
-                    <p class="season-stat-label">FT%</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    """
+    with col2:
+        st.write(f"**{player_name}**")
+        st.write(f"{position} • {team} #{jersey}")
+        st.write(f"{height} • {weight} • Age {age}")
+        st.write(f"Games: {games_played}")
     
-    st.markdown(card_html, unsafe_allow_html=True)
+    with col3:
+        st.metric("Overall Fit", f"{fit_score:.1f}")
+    
+    st.divider()
+    
+    # Fit scores in big boxes (prominent)
+    st.write("**Fit Analysis**")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Role Match", f"{role_match:.1f}")
+    with col2:
+        st.metric("Scheme Fit", f"{scheme_fit:.1f}")
+    with col3:
+        st.metric("Lineup Synergy", f"{lineup_synergy:.1f}")
+    with col4:
+        st.metric("Team Redundancy", f"{team_redundancy:.1f}")
+    with col5:
+        st.metric("Upside", f"{upside:.1f}")
+    
+    st.divider()
+    
+    # Player stats in small text
+    st.write("**Season Stats**")
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        st.write(f"PPG: {pts_avg:.1f}")
+    with col2:
+        st.write(f"RPG: {reb_avg:.1f}")
+    with col3:
+        st.write(f"APG: {ast_avg:.1f}")
+    with col4:
+        st.write(f"FG%: {fg_pct_display}")
+    with col5:
+        st.write(f"3P%: {fg3_pct_display}")
+    with col6:
+        st.write(f"FT%: {ft_pct_display}")
+    
+    # Close the container
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # Current NBA season constant
 
