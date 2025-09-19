@@ -149,59 +149,75 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     upside = fit_result.get('upside', 0)
     
     # Create player card using Streamlit native components
-    # Player header
-    col1, col2, col3 = st.columns([1, 3, 1])
-    
-    with col1:
-        if player_id > 0:
-            st.image(get_player_image_url(player_id), width=80)
-        else:
-            st.write("No Image")
-    
-    with col2:
-        st.write(f"**{player_name}**")
-        st.write(f"{position} • {team} #{jersey}")
-        st.write(f"{height} • {weight} • Age {age}")
-        st.write(f"Games: {games_played}")
-    
-    with col3:
-        st.metric("Overall Fit", f"{fit_score:.1f}")
-    
-    st.divider()
-    
-    # Fit scores in big boxes (prominent)
-    st.write("**Fit Analysis**")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric("Role Match", f"{role_match:.1f}")
-    with col2:
-        st.metric("Scheme Fit", f"{scheme_fit:.1f}")
-    with col3:
-        st.metric("Lineup Synergy", f"{lineup_synergy:.1f}")
-    with col4:
-        st.metric("Team Redundancy", f"{team_redundancy:.1f}")
-    with col5:
-        st.metric("Upside", f"{upside:.1f}")
-    
-    st.divider()
-    
-    # Player stats in small text
-    st.write("**Season Stats**")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        st.write(f"PPG: {pts_avg:.1f}")
-    with col2:
-        st.write(f"RPG: {reb_avg:.1f}")
-    with col3:
-        st.write(f"APG: {ast_avg:.1f}")
-    with col4:
-        st.write(f"FG%: {fg_pct_display}")
-    with col5:
-        st.write(f"3P%: {fg3_pct_display}")
-    with col6:
-        st.write(f"FT%: {ft_pct_display}")
+    # Wrap everything in a container for visual grouping
+    with st.container():
+        st.markdown("""
+        <div style="
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            background-color: #fafafa;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+        """, unsafe_allow_html=True)
+        
+        # Player header
+        col1, col2, col3 = st.columns([1, 3, 1])
+        
+        with col1:
+            if player_id > 0:
+                st.image(get_player_image_url(player_id), width=80)
+            else:
+                st.write("No Image")
+        
+        with col2:
+            st.write(f"**{player_name}**")
+            st.write(f"{position} • {team} #{jersey}")
+            st.write(f"{height} • {weight} • Age {age}")
+            st.write(f"Games: {games_played}")
+        
+        with col3:
+            st.metric("Overall Fit", f"{fit_score:.1f}")
+        
+        st.divider()
+        
+        # Fit scores in big boxes (prominent)
+        st.write("**Fit Analysis**")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("Role Match", f"{role_match:.1f}")
+        with col2:
+            st.metric("Scheme Fit", f"{scheme_fit:.1f}")
+        with col3:
+            st.metric("Lineup Synergy", f"{lineup_synergy:.1f}")
+        with col4:
+            st.metric("Team Redundancy", f"{team_redundancy:.1f}")
+        with col5:
+            st.metric("Upside", f"{upside:.1f}")
+        
+        st.divider()
+        
+        # Player stats in small text
+        st.write("**Season Stats**")
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
+        with col1:
+            st.write(f"PPG: {pts_avg:.1f}")
+        with col2:
+            st.write(f"RPG: {reb_avg:.1f}")
+        with col3:
+            st.write(f"APG: {ast_avg:.1f}")
+        with col4:
+            st.write(f"FG%: {fg_pct_display}")
+        with col5:
+            st.write(f"3P%: {fg3_pct_display}")
+        with col6:
+            st.write(f"FT%: {ft_pct_display}")
+        
+        # Close the card container
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # Current NBA season constant
 
