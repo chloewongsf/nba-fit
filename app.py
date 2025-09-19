@@ -82,24 +82,48 @@ p, div, span {
     display: none !important;
 }
 
-/* Remove any default container styling */
+/* Remove ALL container styling that creates visible boxes */
 .stApp > div,
 .main .block-container,
-.stApp > div > div {
+.stApp > div > div,
+div[data-testid="stAppViewContainer"],
+div[data-testid="stAppViewContainer"] > div,
+div[data-testid="stAppViewContainer"] > div > div,
+div[data-testid="stAppViewContainer"] > div > div > div,
+.stApp > div > div > div,
+.stApp > div > div > div > div {
     background-color: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
+    box-shadow: none !important;
 }
 
-/* Remove container styling from main content area */
-div[data-testid="stAppViewContainer"] {
+/* Remove any Streamlit default container styling */
+div[style*="background-color"],
+div[style*="border"],
+div[style*="padding"],
+div[style*="margin"] {
     background-color: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Specifically target any container with light backgrounds */
+div[style*="rgb(248, 249, 250)"],
+div[style*="#f8f9fa"],
+div[style*="rgb(255, 255, 255)"],
+div[style*="#ffffff"] {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
