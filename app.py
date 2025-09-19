@@ -81,6 +81,26 @@ p, div, span {
 .stExpander [class*="arrow"] {
     display: none !important;
 }
+
+/* Remove any default container styling */
+.stApp > div,
+.main .block-container,
+.stApp > div > div {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Remove container styling from main content area */
+div[data-testid="stAppViewContainer"] {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -148,18 +168,7 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     team_redundancy = fit_result.get('team_redundancy', 0)
     upside = fit_result.get('upside', 0)
     
-    # Create player card using Streamlit native components with proper container
-    # Use a custom container with background styling
-    st.markdown("""
-    <div style="
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 10px 0;
-    ">
-    """, unsafe_allow_html=True)
-    
+    # Create player card using Streamlit native components
     # Player header
     col1, col2, col3 = st.columns([1, 3, 1])
     
@@ -213,9 +222,6 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
         st.write(f"3P%: {fg3_pct_display}")
     with col6:
         st.write(f"FT%: {ft_pct_display}")
-    
-    # Close the container
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # Current NBA season constant
 
