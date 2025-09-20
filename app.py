@@ -11,10 +11,11 @@ from core.scoring import score_player
 # Clear Streamlit cache
 st.cache_data.clear()
 
-# Set Inter font for the entire app
+# Minimal CSS for the app
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
 /* Apply Inter font to all elements */
 * {
@@ -144,6 +145,23 @@ div[data-testid="stMarkdownContainer"] h2 {
 .stSidebar .stMarkdown {
     word-wrap: break-word !important;
     overflow-wrap: break-word !important;
+}
+/* Fix Material Icons not loading */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+.material-icons {
+    font-family: 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
+    -webkit-font-feature-settings: 'liga' !important;
+    -webkit-font-smoothing: antialiased !important;
 }
 /* Remove spacing below the two-column sections */
 div[data-testid="stVerticalBlock"]:has(.stColumns) {
@@ -620,7 +638,7 @@ st.set_page_config(
 # Title
 st.markdown("""
 <div style="text-align: left; margin-bottom: 20px;">
-    <h1 style="font-size: 32px; font-weight: 700; margin: 0 0 2px 0; color: #000; line-height: 1.1;">NBA Fit: Team Contextual Player Valuation</h1>
+    <h1 style="font-size: 32px; font-weight: 700; margin: 0 0 2px 0; color: #000; line-height: 1.1;">NBA Fit: Team Contextual Player Valuation (2024-25)</h1>
     <p style="font-size: 18px; font-weight: 300; margin: 0 0 0 0; color: #999; line-height: 1.2;">Does this player's game fit today's league?</p>
 </div>
 """, unsafe_allow_html=True)
@@ -660,11 +678,8 @@ with st.spinner("Loading active NBA players from JSON data..."):
             st.sidebar.warning("⚠️ Unable to load NBA players from JSON data.")
             st.sidebar.info("💡 The JSON data files may not be available. Try refreshing the page, or use the Custom Player option below.")
         else:
-            # Show data source status
-            from data_api import get_data_status
-            data_status = get_data_status()
-            st.sidebar.success(f"✅ Data source: {data_status['data_source']}")
-            st.sidebar.info(f"📊 Loaded {len(active_players_df)} active players")
+            # Data loaded successfully (no status messages needed)
+            pass
     except Exception as e:
         st.sidebar.error(f"❌ Error loading players: {str(e)}")
         st.sidebar.warning("⚠️ Unable to load JSON data. Please check your internet connection or try refreshing the page.")
@@ -836,7 +851,11 @@ else:  # Custom Player
 
 # Lineup selection (for both NBA players and custom players)
 if selected_player:
-    st.sidebar.subheader("Lineup Analysis")
+    st.sidebar.markdown("""
+    <div style="font-weight: 600 !important; font-size: 16px !important; margin: 0 0 8px 0;">
+        <strong>Lineup Analysis</strong>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Starting lineup selection (4 players, excluding candidate)
     # Filter out the candidate player from lineup options
@@ -951,7 +970,11 @@ if selected_player:
             # Display lineup analysis
             if roster_summary.get('lineup_vectors'):
                 st.markdown("---")  # Add a clean separator
-                st.subheader("Lineup Analysis")
+                st.markdown("""
+                <div style="font-weight: 600 !important; font-size: 16px !important; margin: 0 0 8px 0;">
+                    <strong>Lineup Analysis</strong>
+                </div>
+                """, unsafe_allow_html=True)
                 lineup_players_count = len(roster_summary['lineup_vectors'])
                 if player_vec is not None:
                     total_analyzing = lineup_players_count + 1
