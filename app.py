@@ -8,6 +8,9 @@ from core.features import FeatureEngineer
 from core.context import build_scheme_vector, summarize_roster
 from core.scoring import score_player
 
+# Clear Streamlit cache
+st.cache_data.clear()
+
 # Set Inter font for the entire app
 st.markdown("""
 <style>
@@ -52,6 +55,105 @@ p, div, span {
     display: none !important;
 }
 
+/* Consistent spacing for all sections */
+.stMarkdown {
+    margin-bottom: 8px !important;
+}
+.stMarkdown h3 {
+    margin-bottom: 4px !important;
+}
+hr {
+    margin-top: 4px !important;
+    margin-bottom: 8px !important;
+}
+[data-testid="metric-container"] {
+    margin-top: 4px !important;
+    margin-bottom: 8px !important;
+    padding: 4px !important;
+}
+.stColumns {
+    margin-bottom: 8px !important;
+}
+div[data-testid="stVerticalBlock"] {
+    margin-bottom: 8px !important;
+}
+.stContainer {
+    margin-bottom: 8px !important;
+}
+.element-container {
+    margin-bottom: 8px !important;
+}
+/* Make scores and stats numbers smaller */
+[data-testid="metric-container"] div:first-child {
+    font-size: 18px !important;
+    font-weight: 500 !important;
+}
+[data-testid="metric-container"] div:nth-child(2) {
+    font-size: 12px !important;
+    font-weight: 300 !important;
+}
+/* Standardize headings */
+h3, h4, h5, h6 {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+}
+/* Force main headings to be larger */
+h1, h2, .stMarkdown h1, .stMarkdown h2 {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    margin-bottom: 16px !important;
+    line-height: 1.2 !important;
+}
+/* Target Streamlit's specific heading classes */
+.stApp h1, .stApp h2, 
+div[data-testid="stMarkdownContainer"] h1,
+div[data-testid="stMarkdownContainer"] h2 {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    margin-bottom: 16px !important;
+}
+/* Custom title classes */
+.custom-title {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    margin: 0 0 4px 0 !important;
+    color: #000 !important;
+    text-align: left !important;
+    padding: 0 !important;
+}
+.custom-subtitle {
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    margin: 0 0 16px 0 !important;
+    color: #666 !important;
+    text-align: left !important;
+    padding: 0 !important;
+}
+/* Add spacing for visualizations */
+.stDataFrame, .stPlotlyChart, .stPydeckChart {
+    margin-top: 16px !important;
+}
+/* Fix sidebar horizontal overflow */
+.stSidebar {
+    overflow-x: hidden !important;
+}
+.stSidebar .stSelectbox, .stSidebar .stTextInput, .stSidebar .stNumberInput, .stSidebar .stSlider {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+.stSidebar .stMarkdown {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+/* Remove spacing below the two-column sections */
+div[data-testid="stVerticalBlock"]:has(.stColumns) {
+    margin-bottom: 0px !important;
+}
+/* Add spacing for any element that comes after a section */
+div[data-testid="stVerticalBlock"]:has(.stColumns) + div {
+    margin-top: 16px !important;
+}
+
 /* Hide expander arrows specifically */
 .stExpander [data-testid="stExpanderToggleIcon"],
 .stExpander .streamlit-expanderHeader .streamlit-expanderToggleIcon,
@@ -80,6 +182,50 @@ p, div, span {
 .stExpander [class*="icon"],
 .stExpander [class*="arrow"] {
     display: none !important;
+}
+
+/* Remove ALL container styling that creates visible boxes */
+.stApp > div,
+.main .block-container,
+.stApp > div > div,
+div[data-testid="stAppViewContainer"],
+div[data-testid="stAppViewContainer"] > div,
+div[data-testid="stAppViewContainer"] > div > div,
+div[data-testid="stAppViewContainer"] > div > div > div,
+.stApp > div > div > div,
+.stApp > div > div > div > div {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Remove any Streamlit default container styling */
+div[style*="background-color"],
+div[style*="border"],
+div[style*="padding"],
+div[style*="margin"] {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Specifically target any container with light backgrounds */
+div[style*="rgb(248, 249, 250)"],
+div[style*="#f8f9fa"],
+div[style*="rgb(255, 255, 255)"],
+div[style*="#ffffff"] {
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -148,73 +294,267 @@ def create_player_card_v6(player_name, player_id, season_stats, fit_result, anal
     team_redundancy = fit_result.get('team_redundancy', 0)
     upside = fit_result.get('upside', 0)
     
-    # Create player card using Streamlit native components with proper container
-    # Use a custom container with background styling
+    # Main content area with clean window-style layout
     st.markdown("""
     <div style="
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 10px 0;
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin: 20px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     ">
     """, unsafe_allow_html=True)
     
-    # Player header
-    col1, col2, col3 = st.columns([1, 3, 1])
+    # Player Card with CSS classes
+    player_image_url = get_player_image_url(player_id) if player_id > 0 else "https://via.placeholder.com/80x80?text=No+Image"
     
-    with col1:
-        if player_id > 0:
-            st.image(get_player_image_url(player_id), width=80)
-        else:
-            st.write("No Image")
+    # Overall Fit Score at the top
+    st.markdown(f"""
+    <div style="text-align: left; margin-bottom: 8px;">
+        <div style="font-size: 14px; font-weight: 600; color: #333; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">Overall Fit</div>
+        <div style="font-size: 36px; font-weight: 700; color: #ff4b4b; margin: 0;">{fit_score:.1f}</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    with col2:
-        st.write(f"**{player_name}**")
-        st.write(f"{position} • {team} #{jersey}")
-        st.write(f"{height} • {weight} • Age {age}")
-        st.write(f"Games: {games_played}")
+    # Define CSS classes for player card
+    player_card_css = """
+    <style>
+    * {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .player-card {
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        display: inline-block;
+        width: fit-content;
+        min-width: 420px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .player-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+    .player-info-row {
+        display: flex;
+        align-items: center;
+    }
+    .player-image {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        margin-right: 20px;
+        object-fit: cover;
+    }
+    .player-details h3 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 500;
+    }
+    .player-details p {
+        margin: 6px 0;
+        font-size: 16px;
+        color: #666;
+        font-weight: 300;
+    }
+    h3, h4, h5, h6 {
+        font-size: 16px !important;
+        font-weight: 500 !important;
+    }
+    /* Keep main headings larger */
+    h1, h2 {
+        font-size: inherit !important;
+        font-weight: inherit !important;
+    }
+    /* Make scores and stats numbers smaller - aggressive targeting */
+    [data-testid="metric-container"] {
+        font-size: 14px !important;
+    }
+    [data-testid="metric-container"] div {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+    }
+    [data-testid="metric-container"] div div {
+        font-size: 12px !important;
+        font-weight: 300 !important;
+    }
+    /* Target all metric-related elements */
+    .stMetric, .stMetric > div, .stMetric > div > div {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+    }
+    /* Target the label specifically */
+    .stMetric > div > div:first-child {
+        font-size: 12px !important;
+        font-weight: 300 !important;
+    }
+    /* Global override for large numbers */
+    div[style*="font-size: 2rem"], div[style*="font-size: 1.5rem"], div[style*="font-size: 24px"], div[style*="font-size: 32px"] {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+    }
+    /* Reduce whitespace in sections */
+    .stMarkdown {
+        margin-bottom: 4px !important;
+    }
+    .stMarkdown h3 {
+        margin-bottom: 2px !important;
+    }
+    /* Make horizontal lines closer to headings */
+    hr {
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
+    }
+    /* Reduce spacing in metric containers */
+    [data-testid="metric-container"] {
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
+        padding: 2px !important;
+    }
+    /* Reduce spacing between columns */
+    .stColumns {
+        gap: 16px !important;
+    }
+    /* Reduce padding in section containers */
+    div[style*="padding: 20px"] {
+        padding: 12px !important;
+    }
+    /* Reduce whitespace above Candidate's Season Stats */
+    .stDataFrame {
+        margin-top: 4px !important;
+    }
+    /* Target the specific heading before the dataframe */
+    h3 + div[data-testid="stDataFrame"] {
+        margin-top: 2px !important;
+    }
+    /* Reduce spacing for any element before the dataframe */
+    div[data-testid="stDataFrame"] {
+        margin-top: 4px !important;
+    }
+    /* Force reduce spacing after the two-column sections */
+    .stColumns {
+        margin-bottom: 2px !important;
+    }
+    /* Target the specific container that holds both sections */
+    div[data-testid="stVerticalBlock"] {
+        margin-bottom: 2px !important;
+    }
+    /* Reduce spacing after markdown containers */
+    .stMarkdown:has(div[style*="background: #f8f9fa"]) {
+        margin-bottom: 2px !important;
+    }
+    /* Target the container that holds the sections */
+    .stContainer {
+        margin-bottom: 2px !important;
+    }
+    /* Force minimal spacing after the sections */
+    div[data-testid="stVerticalBlock"]:has(.stColumns) {
+        margin-bottom: 2px !important;
+    }
+    /* Alternative targeting */
+    .element-container {
+        margin-bottom: 2px !important;
+    }
+    </style>
+    """
     
-    with col3:
-        st.metric("Overall Fit", f"{fit_score:.1f}")
+    # Apply CSS
+    st.markdown(player_card_css, unsafe_allow_html=True)
     
-    st.divider()
+    # Render player card
+    st.markdown(f"""
+    <div class="player-card">
+        <div class="player-info-row">
+            <img src="{player_image_url}" alt="{player_name}" class="player-image">
+            <div class="player-details">
+                <h3>{player_name}</h3>
+                <p><strong>{position}</strong> • {team} #{jersey}</p>
+                <p>{height} • {weight} lbs • Age {age}</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Fit scores in big boxes (prominent)
-    st.write("**Fit Analysis**")
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Create empty containers for tight control
+    sections_container = st.empty()
     
-    with col1:
-        st.metric("Role Match", f"{role_match:.1f}")
-    with col2:
-        st.metric("Scheme Fit", f"{scheme_fit:.1f}")
-    with col3:
-        st.metric("Lineup Synergy", f"{lineup_synergy:.1f}")
-    with col4:
-        st.metric("Team Redundancy", f"{team_redundancy:.1f}")
-    with col5:
-        st.metric("Upside", f"{upside:.1f}")
+    # Two-column layout with vertical separator - SWAPPED POSITIONS
+    with sections_container.container():
+        col1, col2 = st.columns([1, 1], gap="small")
+        
+        with col1:
+            # Season Statistics window (moved to left)
+            st.markdown("""
+            <div style="
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 12px;
+                border: 1px solid #e9ecef;
+                height: 100%;
+                border-right: 3px solid #dee2e6;
+            ">
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style="font-weight: 600; font-size: 16px; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <strong>Season Statistics</strong>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("---")
+            
+            # Two-column layout for stats to match fit analysis visual weight
+            stat_col1, stat_col2 = st.columns(2)
+            
+            with stat_col1:
+                st.metric("PPG", f"{pts_avg:.1f}")
+                st.metric("RPG", f"{reb_avg:.1f}")
+                st.metric("APG", f"{ast_avg:.1f}")
+                st.metric("Games", f"{games_played}")
+            
+            with stat_col2:
+                st.metric("FG%", f"{fg_pct_display}")
+                st.metric("3P%", f"{fg3_pct_display}")
+                st.metric("FT%", f"{ft_pct_display}")
+                st.metric("Position", f"{position}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        with col2:
+            # Fit Analysis window (moved to right, underneath overall score)
+            st.markdown("""
+            <div style="
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 12px;
+                border: 1px solid #e9ecef;
+                height: 100%;
+            ">
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style="font-weight: 600; font-size: 16px; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <strong>Fit Analysis</strong>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("---")
+            
+            # Two-column layout for fit analysis scores
+            fit_col1, fit_col2 = st.columns(2)
+            
+            with fit_col1:
+                st.metric("Role Match", f"{role_match:.1f}", help="How well the player fits their role")
+                st.metric("Scheme Fit", f"{scheme_fit:.1f}", help="How well the player fits the team's scheme")
+                st.metric("Lineup Synergy", f"{lineup_synergy:.1f}", help="How well the player works with the lineup")
+            
+            with fit_col2:
+                st.metric("Team Redundancy", f"{team_redundancy:.1f}", help="How much the player overlaps with existing players")
+                st.metric("Upside", f"{upside:.1f}", help="Player's potential for growth")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
     
-    st.divider()
-    
-    # Player stats in small text
-    st.write("**Season Stats**")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        st.write(f"PPG: {pts_avg:.1f}")
-    with col2:
-        st.write(f"RPG: {reb_avg:.1f}")
-    with col3:
-        st.write(f"APG: {ast_avg:.1f}")
-    with col4:
-        st.write(f"FG%: {fg_pct_display}")
-    with col5:
-        st.write(f"3P%: {fg3_pct_display}")
-    with col6:
-        st.write(f"FT%: {ft_pct_display}")
-    
-    # Close the container
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Current NBA season constant
@@ -278,19 +618,10 @@ st.set_page_config(
 )
 
 # Title
-st.title("NBA Fit")
 st.markdown("""
-<style>
-.custom-subheader {
-    margin-top: -0.5rem !important;
-    margin-bottom: 0 !important;
-    font-size: 1.1rem !important;
-    color: #666 !important;
-    font-weight: 400 !important;
-}
-</style>
-<div class="custom-subheader">
-<h5>Team Contextual Player Valuation</h5>
+<div style="text-align: left; margin-bottom: 20px;">
+    <h1 style="font-size: 32px; font-weight: 700; margin: 0 0 2px 0; color: #000; line-height: 1.1;">NBA Fit: Team Contextual Player Valuation</h1>
+    <p style="font-size: 18px; font-weight: 300; margin: 0 0 0 0; color: #999; line-height: 1.2;">Does this player's game fit today's league?</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -428,11 +759,21 @@ if player_source == "NBA Player":
 else:  # Custom Player
     st.sidebar.subheader("Custom Player Stats")
     
+    # Show helpful prompt for custom player
+    st.info("""
+    **📝 Create Your Custom Player**
+    
+    Fill out the stats below to analyze how your custom player would fit in today's NBA. 
+    
+    **Required:** Name, Age, Height, Weight
+    **Recommended:** Shooting percentages, per-game stats
+    """)
+    
     # Input fields for custom player stats
     custom_name = st.sidebar.text_input("Name", value="Custom Player")
     custom_age = st.sidebar.number_input("Age", min_value=18, max_value=45, value=26)
     custom_height = st.sidebar.number_input("Height (inches)", min_value=60, max_value=90, value=78)
-    custom_weight = st.sidebar.number_input("Weight (lbs)", min_value=150, max_value=350, value=215)
+    custom_weight = st.sidebar.number_input("Weight (lbs)", min_value=100, max_value=350, value=215)
     
     st.sidebar.subheader("Shooting Stats")
     custom_fg_pct = st.sidebar.number_input("FG%", min_value=0.0, max_value=1.0, value=0.45, step=0.01, format="%.3f")
@@ -591,7 +932,6 @@ if selected_player:
     
     # Display lineup fit analysis with beautiful player card
     if lineup_fit_result is not None:
-        st.subheader("Lineup Fit Analysis")
         
         # Create beautiful player card with NBA API data
         if player_source == "NBA Player" and selected_player_id:
@@ -649,7 +989,7 @@ if selected_player and player_source == "NBA Player" and selected_player_id:
             margin-bottom: 0.5rem !important;
         }}
         </style>
-        <div class="season-stats-header">Candidate's Season Stats</div>
+        <div class="season-stats-header">Candidate's Season Box Score</div>
         """, unsafe_allow_html=True)
         st.dataframe(season_averages_df, use_container_width=True)
 elif selected_player and player_stats_df is not None and not player_stats_df.empty:
@@ -664,12 +1004,25 @@ elif selected_player and player_stats_df is not None and not player_stats_df.emp
         margin-bottom: 0.5rem !important;
     }}
     </style>
-    <div class="season-stats-header">Candidate's Season Stats{splits_text}</div>
+    <div class="season-stats-header">Candidate's Season Box Score{splits_text}</div>
     """, unsafe_allow_html=True)
     st.dataframe(player_stats_df, use_container_width=True)
 
 # Display radar chart for player vs scheme fit (for all players)
 if player_vec is not None:
+    # Define feature labels for display
+    feature_labels = {
+        'three_rate': 'Three-Point Rate',
+        'ft_rate': 'Free Throw Rate', 
+        'ast_pct': 'Assist %',
+        'tov_pct': 'Turnover %',
+        'stl_pct': 'Steal %',
+        'blk_pct': 'Block %',
+        'dreb_pct': 'Defensive Rebound %',
+        'switchability': 'Switchability',
+        'rim_protect': 'Rim Protection'
+    }
+    
     # Define the features to display in radar chart
     radar_features = [
         'three_rate', 'ft_rate', 'ast_pct', 'tov_pct', 
@@ -699,10 +1052,13 @@ if player_vec is not None:
     # Create radar chart
     fig = go.Figure()
     
+    # Convert field names to display labels
+    display_labels = [feature_labels.get(feature, feature) for feature in radar_features]
+    
     # Add player vector (blue)
     fig.add_trace(go.Scatterpolar(
         r=player_values,
-        theta=radar_features,
+        theta=display_labels,
         fill='toself',
         name='Player',
         line_color='blue',
@@ -712,7 +1068,7 @@ if player_vec is not None:
     # Add scheme vector (red)
     fig.add_trace(go.Scatterpolar(
         r=scheme_values,
-        theta=radar_features,
+        theta=display_labels,
         fill='toself',
         name='Scheme',
         line_color='red',
