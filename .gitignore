@@ -43,4 +43,5 @@ ENV/
 Thumbs.db
 
 # Streamlit
-.streamlit/
+.streamlit/__pycache__/
+*.pyc
